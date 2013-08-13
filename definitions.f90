@@ -45,6 +45,7 @@ MODULE definitions_module
    LOGICAL      :: use_OA_kernels
    LOGICAL      :: use_Tealeaf
    LOGICAL      :: use_Hydro
+   LOGICAL      :: use_PETSC_kernels
    INTEGER      :: max_iters
    REAL(KIND=8) :: eps
    INTEGER      :: coefficient
@@ -54,6 +55,9 @@ MODULE definitions_module
    REAL(KIND=8) :: end_time
 
    INTEGER      :: end_step
+  
+   INTEGER      :: px   ! Processor Decomposition in X Domain
+   INTEGER      :: py   ! Processor Decomposition in Y Domain
 
    REAL(KIND=8) :: dtold          &
                   ,dt             &

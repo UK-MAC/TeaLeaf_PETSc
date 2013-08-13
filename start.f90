@@ -66,6 +66,12 @@ SUBROUTINE start
 
   CALL clover_barrier
 
+  ! Substitute for PETSc Setup Call
+  IF(use_PETSC_kernels) THEN
+    write(6,*) ' Using PETSc'
+    CALL setup_petsc(eps,max_iters)
+  ENDIF
+
   DO c=1,number_of_chunks
     IF(chunks(c)%task.EQ.parallel%task)THEN
       CALL clover_allocate_buffers(c)

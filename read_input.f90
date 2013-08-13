@@ -42,6 +42,7 @@ SUBROUTINE read_input()
   use_OA_kernels=.FALSE.
   use_vector_loops=.FALSE.
   use_TeaLeaf=.FALSE.
+  use_PETSC_kernels=.FALSE.
   max_iters = 1000
   eps = 10e-8
   use_Hydro = .TRUE.
@@ -152,6 +153,8 @@ SUBROUTINE read_input()
       CASE('tl_coefficient')
         coefficient = parse_getival(parse_getword(.TRUE.))
         IF(parallel%boss)WRITE(g_out,"(1x,a25,i12)")'diffusion coefficient',coefficient
+      CASE('use_petsc')
+        use_PETSC_kernels = .TRUE.
       CASE('state')
 
         state=parse_getival(parse_getword(.TRUE.))

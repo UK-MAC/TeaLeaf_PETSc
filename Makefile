@@ -38,11 +38,17 @@
 #        make IEEE=1              # Will select debug options as long as a compiler is selected as well
 # e.g. make COMPILER=INTEL MPI_COMPILER=mpiifort C_MPI_COMPILER=mpiicc DEBUG=1 IEEE=1 # will compile with the intel compiler with intel debug and ieee flags included
 
+HYPRE_DIR=/home/jad/opt/hypre/2.8.0b/static/intel/12.0/openmpi/1.4.4/
+PETSC_DIR=/home/jad/opt/petsc/3.3-p6/nodebug/static/intel/12.0/openmpi/1.4.4/
+SPOOLES_DIR=/home/jad/opt/spooles/2.2/static/intel/12.0/openmpi/1.4.4/
+ML_DIR=/home/jad/opt/ml//6.2/static/intel/12.0/openmpi/1.4.4/
+LAPACK_DIR=/home/jad/opt/lapack/3.3.0/static/intel/12.0/
+
 ifndef COMPILER
   MESSAGE=select a compiler to compile in OpenMP, e.g. make COMPILER=INTEL
 endif
 
-OMP_INTEL     = -openmp
+OMP_INTEL     =
 OMP_SUN       = -xopenmp=parallel -vpara
 OMP_GNU       = -fopenmp
 OMP_CRAY      =
@@ -51,7 +57,7 @@ OMP_PATHSCALE = -mp
 OMP_XLF       = -qsmp=omp -qthreaded
 OMP=$(OMP_$(COMPILER))
 
-FLAGS_INTEL     = -O3 -ipo
+FLAGS_INTEL     = -O3 -ipo -fpp
 FLAGS_SUN       = -fast
 FLAGS_GNU       = -O3
 FLAGS_CRAY      = -em -ra -h acc_model=fast_addr:no_deep_copy:auto_async_all
@@ -92,8 +98,8 @@ ifdef IEEE
   I3E=$(I3E_$(COMPILER))
 endif
 
-FLAGS=$(FLAGS_$(COMPILER)) $(OMP) $(I3E) $(OPTIONS)
-CFLAGS=$(CFLAGS_$(COMPILER)) $(OMP) $(I3E) $(C_OPTIONS) -c
+FLAGS=$(FLAGS_$(COMPILER)) $(OMP) $(I3E) $(OPTIONS) -I${PETSC_DIR}/include -lm -lmpi_cxx -lstdc++ 
+CFLAGS=$(CFLAGS_$(COMPILER)) $(OMP) $(I3E) $(C_OPTIONS) -I${PETSC_DIR}/include -c
 MPI_COMPILER=mpif90
 C_MPI_COMPILER=mpicc
 
@@ -101,6 +107,7 @@ clover_leaf: c_lover *.f90 Makefile
 	$(MPI_COMPILER) $(FLAGS)	\
 	data.f90			\
 	definitions.f90			\
+	PetscLeaf.f90		\
 	clover.f90			\
 	report.f90			\
 	timer.f90			\
@@ -156,7 +163,17 @@ clover_leaf: c_lover *.f90 Makefile
 	advec_mom_kernel_c.o            \
 	advec_cell_kernel_c.o           \
 	tea_leaf_kernel_c.o             \
+	$(PETSC_DIR)/lib/libpetsc.a     \
+	$(SPOOLES_DIR)/lib/libspoolesMPI.a    \
+	$(SPOOLES_DIR)/lib/libspooles.a    \
+	$(HYPRE_DIR)/lib/libHYPRE.a     \
+	$(ML_DIR)/lib/libml.a           \
+	$(LAPACK_DIR)/lib/liblapack.a \
+	$(LAPACK_DIR)/lib/libblas.a \
+	$(LAPACK_DIR)/lib/libtmglib.a \
 	-o clover_leaf; echo $(MESSAGE)
+
+
 
 c_lover: *.c Makefile
 	$(C_MPI_COMPILER) $(CFLAGS)     \
@@ -170,7 +187,6 @@ c_lover: *.c Makefile
 	advec_mom_kernel_c.c            \
 	advec_cell_kernel_c.c           \
 	tea_leaf_kernel_c.c
-
 
 clean:
 	rm -f *.o *.mod *genmod* clover_leaf

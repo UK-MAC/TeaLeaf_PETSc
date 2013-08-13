@@ -3,6 +3,7 @@ MODULE clover_module
   USE data_module
   USE definitions_module
   USE MPI
+  USE PETScTeaLeaf
 
   IMPLICIT NONE
 
@@ -27,6 +28,10 @@ END SUBROUTINE clover_abort
 SUBROUTINE clover_finalize
 
   INTEGER :: err
+
+  IF(use_PETSC_kernels) THEN
+    CALL cleanup_petsc()
+  ENDIF
 
   CLOSE(g_out)
   CALL FLUSH(0)
@@ -157,6 +162,9 @@ SUBROUTINE clover_decompose(x_cells,y_cells,left,right,bottom,top)
     add_x_prev=0
     IF(cy.LE.mod_y)add_y_prev=add_y_prev+1
   ENDDO
+
+  px = chunk_x
+  py = chunk_y
 
   IF(parallel%boss)THEN
     WRITE(g_out,*)

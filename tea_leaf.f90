@@ -14,7 +14,8 @@ SUBROUTINE tea_leaf()
   REAL(KIND=8) :: ry,rx, error
 
   INTEGER :: fields(NUM_FIELDS)
-
+  INTEGER :: numit                ! number of iterations taken
+  CHARACTER(len=30) :: n_char
 
   DO c=1,number_of_chunks
 
@@ -25,7 +26,7 @@ SUBROUTINE tea_leaf()
       fields(FIELD_DENSITY1) = 1
       CALL update_halo(fields,2)
 
-      ! INIT
+      ! INIT - set up coefficients based on material temperature
       IF(use_fortran_kernels) THEN
           CALL tea_leaf_kernel_init(chunks(c)%field%x_min, &
               chunks(c)%field%x_max,                       &
@@ -72,49 +73,70 @@ SUBROUTINE tea_leaf()
       rx = dt/(chunks(c)%field%celldx(chunks(c)%field%x_min)**2);
       ry = dt/(chunks(c)%field%celldy(chunks(c)%field%y_min)**2);
 
-      DO n=1,max_iters
+      IF(.not. use_PETSC_kernels) THEN
+        DO n=1,max_iters
 
-        IF(use_fortran_kernels) THEN
-            CALL tea_leaf_kernel_solve(chunks(c)%field%x_min,&
-                chunks(c)%field%x_max,                       &
-                chunks(c)%field%y_min,                       &
-                chunks(c)%field%y_max,                       &
-                rx,                                          &
-                ry,                                          &
-                chunks(c)%field%work_array6,                 &
-                chunks(c)%field%work_array7,                 &
-                error,                                       &
-                chunks(c)%field%work_array1,                 &
-                chunks(c)%field%u,                           &
-                chunks(c)%field%work_array2)
-        ELSEIF(use_C_kernels) THEN
-            CALL tea_leaf_kernel_solve_c(chunks(c)%field%x_min,&
-                chunks(c)%field%x_max,                       &
-                chunks(c)%field%y_min,                       &
-                chunks(c)%field%y_max,                       &
-                rx,                                          &
-                ry,                                          &
-                chunks(c)%field%work_array6,                 &
-                chunks(c)%field%work_array7,                 &
-                error,                                       &
-                chunks(c)%field%work_array1,                 &
-                chunks(c)%field%u,                           &
-                chunks(c)%field%work_array2)
-        ENDIF
+          IF(use_fortran_kernels) THEN
+              CALL tea_leaf_kernel_solve(chunks(c)%field%x_min,&
+                  chunks(c)%field%x_max,                       &
+                  chunks(c)%field%y_min,                       &
+                  chunks(c)%field%y_max,                       &
+                  rx,                                          &
+                  ry,                                          &
+                  chunks(c)%field%work_array6,                 &
+                  chunks(c)%field%work_array7,                 &
+                  error,                                       &
+                  chunks(c)%field%work_array1,                 &
+                  chunks(c)%field%u,                           &
+                  chunks(c)%field%work_array2)
+          ELSEIF(use_C_kernels) THEN
+              CALL tea_leaf_kernel_solve_c(chunks(c)%field%x_min,&
+                  chunks(c)%field%x_max,                       &
+                  chunks(c)%field%y_min,                       &
+                  chunks(c)%field%y_max,                       &
+                  rx,                                          &
+                  ry,                                          &
+                  chunks(c)%field%work_array6,                 &
+                  chunks(c)%field%work_array7,                 &
+                  error,                                       &
+                  chunks(c)%field%work_array1,                 &
+                  chunks(c)%field%u,                           &
+                  chunks(c)%field%work_array2)
+          ENDIF
 
-        ! CALL update_halo
-        fields=0
-        fields(FIELD_U) = 1
-        CALL update_halo(fields,2)
+          ! CALL update_halo
+          fields=0
+          fields(FIELD_U) = 1
+          CALL update_halo(fields,2)
 
-        CALL clover_max(error)
+          CALL clover_max(error)
 
-        IF (error .LT. eps) EXIT
+          IF (error .LT. eps) EXIT
 
-      ENDDO
+        ENDDO
+      ELSEIF (use_PETSC_kernels) THEN
 
-      PRINT *, 'ERR: ', error
-      PRINT *, 'ITER: ', (n-1)
+        ! Substitute for PETSc Solve
+
+		    !write(6,*) 'Calling PETSc Object Population and Solve'
+
+        CALL setupMatA_petsc(c,rx,ry)
+        CALL setupRHS_petsc(c,rx,ry)
+        CALL setupSol_petsc(c,rx,ry)
+
+        !write(n_char,'(I30)'),step
+
+        !CALL printXVec('XVec.' // TRIM(adjustl(n_char)) // '.iter')
+        !CALL printBVec('BVec.' // TRIM(adjustl(n_char)) // '.iter')
+        !CALL printMatA('MatA.' // TRIM(adjustl(n_char)) // '.iter')
+
+        CALL solve_petsc(numit)
+
+        if(parallel%task .eq. 0) write(6,*) 'Achieved convergence in ', numit ,' iterations'
+        CALL getSolution_petsc(c)
+
+        !CALL printXVec('XVec.After.' // TRIM(adjustl(n_char)) // '.iter')
+      ENDIF
 
       ! RESET
       IF(use_fortran_kernels) THEN
