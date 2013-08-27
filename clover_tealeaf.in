@@ -16,8 +16,12 @@
  max_timestep=0.01
  end_time=3.0
 
+!no_hydro
+
  use_tea_leaf
  tl_max_iters=10000
  tl_coefficient=2
+
+!visit_frequency=1
 
 *endclover

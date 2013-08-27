@@ -270,17 +270,19 @@ subroutine setupRHS_petsc(c,rx,ry)
 
         val = chunks(c)%field%u(i_local,j_local)
 
-        IF(i == g_xmin) THEN
-          val = val + rx * chunks(c)%field%work_array6(i_local,j_local) * chunks(c)%field%u(i_local-1,j_local)
-        ELSE IF(i == g_xmax) THEN
-          val = val + rx * chunks(c)%field%work_array6(i_local+1,j_local) * chunks(c)%field%u(i_local+1,j_local)
-        ENDIF
+        ! This bit now commented out in hypre version - boundary stuff moved to matrix
 
-        IF(j == g_ymin) THEN
-          val = val + ry *  chunks(c)%field%work_array7(i_local,j_local) * chunks(c)%field%u(i_local,j_local-1)
-        ELSE IF(j == g_ymax) THEN
-          val = val + ry * chunks(c)%field%work_array7(i_local,j_local+1) * chunks(c)%field%u(i_local,j_local+1)
-        ENDIF
+!        IF(i == g_xmin) THEN
+!          val = val + rx * chunks(c)%field%work_array6(i_local,j_local) * chunks(c)%field%u(i_local-1,j_local)
+!        ELSE IF(i == g_xmax) THEN
+!          val = val + rx * chunks(c)%field%work_array6(i_local+1,j_local) * chunks(c)%field%u(i_local+1,j_local)
+!        ENDIF
+
+!        IF(j == g_ymin) THEN
+!          val = val + ry *  chunks(c)%field%work_array7(i_local,j_local) * chunks(c)%field%u(i_local,j_local-1)
+!        ELSE IF(j == g_ymax) THEN
+!          val = val + ry * chunks(c)%field%work_array7(i_local,j_local+1) * chunks(c)%field%u(i_local,j_local+1)
+!        ENDIF
 
         bv(i-1,j-1) = val
 
@@ -402,11 +404,28 @@ subroutine setupMatA_petsc(c,rx,ry)
         row(MatStencil_i,1) = i_g - 1
         row(MatStencil_j,1) = j_g - 1
 
-        c1 = (1+2*rx+2*ry)
-        c2 = -rx * chunks(c)%field%work_array6(i,j)
-        c3 = -rx * chunks(c)%field%work_array6(i+1,j)
-        c4 = -ry * chunks(c)%field%work_array7(i,j)
-        c5 = -ry * chunks(c)%field%work_array7(i,j+1)
+        c1 = (1.0+(2.0*rx)+(2.0*ry))
+        c2 = (-1*rx) * chunks(c)%field%work_array6(i,j)
+        c3 = (-1*rx) * chunks(c)%field%work_array6(i+1,j)
+        c4 = (-1*ry) * chunks(c)%field%work_array7(i,j)
+        c5 = (-1*ry) * chunks(c)%field%work_array7(i,j+1)
+
+        IF(i_g == 1) THEN ! Global X Low Boundary
+          c3 = (-2*rx) * chunks(c)%field%work_array6(i+1,j)
+        ENDIF
+
+        IF(i_g == grid%x_cells) THEN
+          c2 = (-2*rx) * chunks(c)%field%work_array6(i,j)
+        ENDIF
+        
+        IF(j_g == 1) THEN
+          c5 = (-2*ry) * chunks(c)%field%work_array7(i,j+1)
+        ENDIF
+
+        IF(j_g == grid%y_cells) THEN
+          c4 = (-2*ry) * chunks(c)%field%work_array7(i,j)
+        ENDIF
+
 
         IF(.NOT.(j_g == 1)) THEN     ! Not Bottom External Boundary
           stencil(count) = c4
@@ -495,6 +514,98 @@ subroutine solve_petsc(numit)
     endif 
 
 end subroutine solve_petsc
+
+
+
+! Apply Paul Garrett Approach
+! (1) Use CG to Execute 10 iteration, retrieve eigenvalues
+! (2) Set Solver to Chebyshev type, set eigenvalues from CG execution
+! (3) Set Residual for Chebyshev to reduce iteration count
+! (4) Execute Chebyshev Solve
+subroutine solve_petsc_pgcg(eps,max_iters,numit)
+
+!    use MPI
+
+#include "finclude/petscsys.h"
+
+    INTEGER,INTENT(INOUT) :: numit
+    INTEGER :: errcode, mpierr
+    KSPConvergedReason :: reason
+    PC :: tPC
+    REAL(kind=8) :: eps
+    INTEGER :: max_iters
+    PetscReal :: r(0:9)    ! Real Component of EigenValue Array
+    PetscReal :: c(0:9)    ! Complex Component of EigenValue Array
+    PetscInt  :: neig      ! Number of Eigenvalues computed
+    PetscReal :: emax      ! Max EigenValue
+    PetscReal :: emin      ! Min EigenValue
+
+    call KSPSetComputeEigenValues(kspObj,PETSC_TRUE,perr) ! Must be called before KSPSetup Routines to enable eigenvalue calculation
+
+    call KSPSetType(kspObj,KSPCG,perr)
+    call KSPGetPC(kspObj,tPC,perr)
+    call PCSetType(tPC,PCNONE,perr)
+
+    call KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
+    call KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,10,perr)
+
+    call KSPSolve(kspObj,B,X,perr)
+
+    ! Don't check convergence reasons or iteration count here - unlikely to have converged yet
+
+    ! Calculate the EigenValues from CG Solve after 10 iterations. Array should be returned sorted.
+    call KSPComputeEigenValues(kspObj,10,r,c,neig,perr)
+    emax = r(neig-1)
+    emin = r(0)
+
+    if(parallel%task .eq. 0) write(6,*) ' Emax:', emax, ', Emin:', emin
+
+    ! Main Solve is in Next section within Chebyshev
+
+    call KSPSetComputeEigenValues(kspObj,PETSC_FALSE,perr) ! Disable EigenValue Calculation
+
+    call KSPSetType(kspObj,KSPCHEBYSHEV,perr)
+    call KSPGetPC(kspObj,tPC,perr)
+    call PCSetType(tPC,PCNONE,perr)
+
+    !call KSPSetInitialGuessNonzero(kspObj,PETSC_TRUE,perr)
+    call KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
+    call KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
+    call KSPChebyshevSetEigenValues(kspObj,emax,emin,perr)
+
+    call KSPSolve(kspObj,B,X,perr)
+
+    call KSPGetIterationNumber(kspObj, numit, perr)
+
+    call KSPGetConvergedReason(kspObj,reason,perr)
+    if(reason < 0) then
+      write(6,*) ' Error: Did not Converge. Calling MPI_Abort'
+	    write(6,*) ' Divergence Reason:'
+
+	    if(reason == -2) then
+		    write(6,*) ' Diverged Null'
+	      else if(reason == -3) then
+		    write(6,*) ' Diverged ITS, took ', numit, ' iterations'
+	      else if(reason == -4) then
+		    write(6,*) ' Diverged DTOL'
+	      else if(reason == -4) then
+		    write(6,*) ' Diverged Breakdown'
+	      else if(reason == -5) then
+		    write(6,*) ' Diverged Breakdown BCGS'
+	      else if(reason == -6) then
+		    write(6,*) ' Diverged NonSymmetric'
+	      else if(reason == -7) then
+		    write(6,*) ' Diverged Indefinte PC'
+	      else if(reason == -8) then
+		    write(6,*) ' Diverged nanorinf'
+	      else if(reason == -9) then
+		    write(6,*) ' Diverged indefinite mat'
+	    endif
+
+      call MPI_Abort(MPI_COMM_WORLD,errcode,mpierr)
+    endif 
+
+end subroutine solve_petsc_pgcg
 
 
 subroutine printXVec(fileName)

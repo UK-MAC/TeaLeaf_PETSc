@@ -118,19 +118,24 @@ SUBROUTINE tea_leaf()
 
         ! Substitute for PETSc Solve
 
-		    !write(6,*) 'Calling PETSc Object Population and Solve'
+		    ! write(6,*) 'Calling PETSc Object Population and Solve'
 
         CALL setupMatA_petsc(c,rx,ry)
         CALL setupRHS_petsc(c,rx,ry)
         CALL setupSol_petsc(c,rx,ry)
 
-        !write(n_char,'(I30)'),step
+        write(n_char,'(I30)'),step
 
         !CALL printXVec('XVec.' // TRIM(adjustl(n_char)) // '.iter')
         !CALL printBVec('BVec.' // TRIM(adjustl(n_char)) // '.iter')
-        !CALL printMatA('MatA.' // TRIM(adjustl(n_char)) // '.iter')
+        ! if(step .eq. 1) CALL printMatA('MatA.' // TRIM(adjustl(n_char)) // '.iter')
 
-        CALL solve_petsc(numit)
+        
+        if(use_pgcg) then    
+          CALL solve_petsc_pgcg(eps,max_iters,numit)    ! Use Paul Garrett's Approach
+        else 
+          CALL solve_petsc(numit)    ! Use Command Line Specified Approach
+        endif
 
         if(parallel%task .eq. 0) write(6,*) 'Achieved convergence in ', numit ,' iterations'
         CALL getSolution_petsc(c)

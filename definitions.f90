@@ -49,6 +49,7 @@ MODULE definitions_module
    INTEGER      :: max_iters
    REAL(KIND=8) :: eps
    INTEGER      :: coefficient
+   LOGICAL      :: use_pgcg
 
    LOGICAL      :: use_vector_loops ! Some loops work better in serial depending on the hardware
 

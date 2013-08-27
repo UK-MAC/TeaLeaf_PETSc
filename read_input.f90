@@ -155,6 +155,8 @@ SUBROUTINE read_input()
         IF(parallel%boss)WRITE(g_out,"(1x,a25,i12)")'diffusion coefficient',coefficient
       CASE('use_petsc')
         use_PETSC_kernels = .TRUE.
+      CASE('use_pgcg')
+        use_pgcg = .TRUE.
       CASE('state')
 
         state=parse_getival(parse_getword(.TRUE.))
