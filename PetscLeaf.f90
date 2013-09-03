@@ -73,6 +73,7 @@ subroutine setup_petsc(eps,max_iters)
   ! Setup the KSP Solver
   call KSPCreate(MPI_COMM_WORLD,kspObj,perr)
   call KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
+
   call KSPSetFromOptions(kspObj,perr)
 
   write(6,*)'PETSc Setup:'
@@ -98,6 +99,10 @@ subroutine setup_petsc(eps,max_iters)
 
   ! Local Vector for X Vector
   call DMCreateLocalVector(petscDA,XLoc,perr)
+
+  total_cg_iter = 0
+  total_cheby_iter = 0
+  total_petsc_iter = 0
 
 end subroutine setup_petsc
 
@@ -490,28 +495,30 @@ subroutine solve_petsc(numit)
       write(6,*) ' Error: Did not Converge. Calling MPI_Abort'
 	  write(6,*) ' Divergence Reason:'
 
-	  if(reason == -2) then
-		write(6,*) ' Diverged Null'
-	  else if(reason == -3) then
-		write(6,*) ' Diverged ITS'
-	  else if(reason == -4) then
-		write(6,*) ' Diverged DTOL'
-	  else if(reason == -4) then
-		write(6,*) ' Diverged Breakdown'
-	  else if(reason == -5) then
-		write(6,*) ' Diverged Breakdown BCGS'
-	  else if(reason == -6) then
-		write(6,*) ' Diverged NonSymmetric'
-	  else if(reason == -7) then
-		write(6,*) ' Diverged Indefinte PC'
-	  else if(reason == -8) then
-		write(6,*) ' Diverged nanorinf'
-	  else if(reason == -9) then
-		write(6,*) ' Diverged indefinite mat'
-	 endif
+	    if(reason == -2) then
+		    write(6,*) ' Diverged Null'
+	      else if(reason == -3) then
+		    write(6,*) ' Diverged ITS, took ', numit, ' iterations'
+	      else if(reason == -4) then
+		    write(6,*) ' Diverged DTOL'
+	      else if(reason == -5) then
+		    write(6,*) ' Diverged Breakdown'
+	      else if(reason == -6) then
+		    write(6,*) ' Diverged Breakdown BICG'
+	      else if(reason == -7) then
+		    write(6,*) ' Diverged NonSymmetric'
+	      else if(reason == -8) then
+		    write(6,*) ' Diverged Indefinite PC'
+	      else if(reason == -9) then
+		    write(6,*) ' Diverged nanorinf'
+	      else if(reason == -10) then
+		    write(6,*) ' Diverged indefinite mat'
+	    endif
 
       call MPI_Abort(MPI_COMM_WORLD,errcode,mpierr)
     endif 
+
+    total_petsc_iter = total_petsc_iter + numit
 
 end subroutine solve_petsc
 
@@ -522,88 +529,102 @@ end subroutine solve_petsc
 ! (2) Set Solver to Chebyshev type, set eigenvalues from CG execution
 ! (3) Set Residual for Chebyshev to reduce iteration count
 ! (4) Execute Chebyshev Solve
-subroutine solve_petsc_pgcg(eps,max_iters,numit)
+subroutine solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby)
 
 !    use MPI
 
 #include "finclude/petscsys.h"
 
-    INTEGER,INTENT(INOUT) :: numit
+    INTEGER,INTENT(INOUT) :: numit_cg, numit_cheby
     INTEGER :: errcode, mpierr
     KSPConvergedReason :: reason
     PC :: tPC
     REAL(kind=8) :: eps
     INTEGER :: max_iters
-    PetscReal :: r(0:9)    ! Real Component of EigenValue Array
-    PetscReal :: c(0:9)    ! Complex Component of EigenValue Array
+    PetscReal :: r(0:pgcg_cg_iter-1)    ! Real Component of EigenValue Array
+    PetscReal :: c(0:pgcg_cg_iter-1)    ! Complex Component of EigenValue Array
     PetscInt  :: neig      ! Number of Eigenvalues computed
     PetscReal :: emax      ! Max EigenValue
     PetscReal :: emin      ! Min EigenValue
+
+    write(6,*) 'pgcg_cg_iter set to ', pgcg_cg_iter
 
     call KSPSetComputeEigenValues(kspObj,PETSC_TRUE,perr) ! Must be called before KSPSetup Routines to enable eigenvalue calculation
 
     call KSPSetType(kspObj,KSPCG,perr)
     call KSPGetPC(kspObj,tPC,perr)
-    call PCSetType(tPC,PCNONE,perr)
+    call PCSetType(tPC,PCBJACOBI,perr)
 
     call KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
-    call KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,10,perr)
+    call KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,pgcg_cg_iter,perr)
+    call KSPSetInitialGuessNonzero(kspObj,PETSC_FALSE,perr)
 
     call KSPSolve(kspObj,B,X,perr)
 
     ! Don't check convergence reasons or iteration count here - unlikely to have converged yet
 
     ! Calculate the EigenValues from CG Solve after 10 iterations. Array should be returned sorted.
-    call KSPComputeEigenValues(kspObj,10,r,c,neig,perr)
+    call KSPComputeEigenValues(kspObj,pgcg_cg_iter,r,c,neig,perr)
     emax = r(neig-1)
     emin = r(0)
 
     if(parallel%task .eq. 0) write(6,*) ' Emax:', emax, ', Emin:', emin
 
-    ! Main Solve is in Next section within Chebyshev
-
-    call KSPSetComputeEigenValues(kspObj,PETSC_FALSE,perr) ! Disable EigenValue Calculation
-
-    call KSPSetType(kspObj,KSPCHEBYSHEV,perr)
-    call KSPGetPC(kspObj,tPC,perr)
-    call PCSetType(tPC,PCNONE,perr)
-
-    !call KSPSetInitialGuessNonzero(kspObj,PETSC_TRUE,perr)
-    call KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
-    call KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
-    call KSPChebyshevSetEigenValues(kspObj,emax,emin,perr)
-
-    call KSPSolve(kspObj,B,X,perr)
-
-    call KSPGetIterationNumber(kspObj, numit, perr)
+    call KSPGetIterationNumber(kspObj, numit_cg, perr)
+    total_cg_iter = total_cg_iter + numit_cg
 
     call KSPGetConvergedReason(kspObj,reason,perr)
-    if(reason < 0) then
-      write(6,*) ' Error: Did not Converge. Calling MPI_Abort'
-	    write(6,*) ' Divergence Reason:'
 
-	    if(reason == -2) then
-		    write(6,*) ' Diverged Null'
-	      else if(reason == -3) then
-		    write(6,*) ' Diverged ITS, took ', numit, ' iterations'
-	      else if(reason == -4) then
-		    write(6,*) ' Diverged DTOL'
-	      else if(reason == -4) then
-		    write(6,*) ' Diverged Breakdown'
-	      else if(reason == -5) then
-		    write(6,*) ' Diverged Breakdown BCGS'
-	      else if(reason == -6) then
-		    write(6,*) ' Diverged NonSymmetric'
-	      else if(reason == -7) then
-		    write(6,*) ' Diverged Indefinte PC'
-	      else if(reason == -8) then
-		    write(6,*) ' Diverged nanorinf'
-	      else if(reason == -9) then
-		    write(6,*) ' Diverged indefinite mat'
-	    endif
+    if(reason < 0) then   ! Did not converge in CG, Progress onto Cheby
 
-      call MPI_Abort(MPI_COMM_WORLD,errcode,mpierr)
-    endif 
+      ! Main Solve is in Next section within Chebyshev
+
+      call KSPSetComputeEigenValues(kspObj,PETSC_FALSE,perr) ! Disable EigenValue Calculation
+
+      call KSPSetType(kspObj,KSPCHEBYSHEV,perr)
+      call KSPGetPC(kspObj,tPC,perr)
+      call PCSetType(tPC,PCBJACOBI,perr)
+
+      call KSPSetInitialGuessNonzero(kspObj,PETSC_TRUE,perr)    ! Disable zeroing of results vector (reuse for residual)
+      call KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
+      call KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
+      call KSPChebyshevSetEigenValues(kspObj,emax,emin,perr)
+
+      call KSPSolve(kspObj,B,X,perr)
+
+      call KSPGetIterationNumber(kspObj, numit_cheby, perr)
+
+      call KSPGetConvergedReason(kspObj,reason,perr)
+      if(reason < 0) then
+        write(6,*) ' Error: Did not Converge. Calling MPI_Abort'
+	      write(6,*) ' Divergence Reason:'
+
+	      if(reason == -2) then
+		      write(6,*) ' Diverged Null'
+	        else if(reason == -3) then
+		      write(6,*) ' Cheby - Diverged ITS, took ', numit_cheby, ' iterations'
+	        else if(reason == -4) then
+		      write(6,*) ' Diverged DTOL'
+	        else if(reason == -5) then
+		      write(6,*) ' Diverged Breakdown'
+	        else if(reason == -6) then
+		      write(6,*) ' Diverged Breakdown BICG'
+	        else if(reason == -7) then
+		      write(6,*) ' Diverged NonSymmetric'
+	        else if(reason == -8) then
+		      write(6,*) ' Diverged Indefinite PC'
+	        else if(reason == -9) then
+		      write(6,*) ' Diverged nanorinf'
+	        else if(reason == -10) then
+		      write(6,*) ' Diverged indefinite mat'
+	      endif
+
+        call MPI_Abort(MPI_COMM_WORLD,errcode,mpierr)
+      endif 
+
+      total_cheby_iter = total_cheby_iter + numit_cheby
+
+    endif
 
 end subroutine solve_petsc_pgcg
 

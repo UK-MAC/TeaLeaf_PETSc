@@ -79,6 +79,12 @@ MODULE definitions_module
    INTEGER      :: visit_frequency   &
                   ,summary_frequency
 
+   INTEGER      :: total_cheby_iter
+   INTEGER      :: total_cg_iter
+   INTEGER      :: total_petsc_iter
+
+   INTEGER      :: pgcg_cg_iter
+
    INTEGER         :: jdt,kdt
 
    TYPE field_type

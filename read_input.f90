@@ -47,6 +47,7 @@ SUBROUTINE read_input()
   eps = 10e-8
   use_Hydro = .TRUE.
   coefficient = CONDUCTIVITY
+  pgcg_cg_iter = 10
 
   IF(parallel%boss)WRITE(g_out,*) 'Reading input file'
   IF(parallel%boss)WRITE(g_out,*)
@@ -157,6 +158,8 @@ SUBROUTINE read_input()
         use_PETSC_kernels = .TRUE.
       CASE('use_pgcg')
         use_pgcg = .TRUE.
+      CASE('pgcg_cg_iter')
+        pgcg_cg_iter = parse_getival(parse_getword(.TRUE.))
       CASE('state')
 
         state=parse_getival(parse_getword(.TRUE.))

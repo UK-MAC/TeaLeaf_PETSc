@@ -44,6 +44,12 @@ SPOOLES_DIR=/home/jad/opt/spooles/2.2/static/intel/12.0/openmpi/1.4.4/
 ML_DIR=/home/jad/opt/ml//6.2/static/intel/12.0/openmpi/1.4.4/
 LAPACK_DIR=/home/jad/opt/lapack/3.3.0/static/intel/12.0/
 
+#HYPRE_DIR=/home/jad/opt/hypre/2.8.0b/static/intel/12.0/mpich/1.4.1p1/
+#PETSC_DIR=/home/jad/opt/petsc/3.3-p6/nodebug/static/intel/12.0/mpich/1.4.1p1/
+#SPOOLES_DIR=/home/jad/opt/spooles/2.2/static/intel/12.0/mpich/1.4.1p1/
+#ML_DIR=/home/jad/opt/ml//6.2/static/intel/12.0/mpich/1.4.1p1/
+#LAPACK_DIR=/home/jad/opt/lapack/3.3.0/static/intel/12.0/
+
 ifndef COMPILER
   MESSAGE=select a compiler to compile in OpenMP, e.g. make COMPILER=INTEL
 endif
@@ -98,7 +104,8 @@ ifdef IEEE
   I3E=$(I3E_$(COMPILER))
 endif
 
-FLAGS=$(FLAGS_$(COMPILER)) $(OMP) $(I3E) $(OPTIONS) -I${PETSC_DIR}/include -lm -lmpi_cxx -lstdc++ 
+#FLAGS=$(FLAGS_$(COMPILER)) $(OMP) $(I3E) $(OPTIONS) -I${PETSC_DIR}/include -lm -lmpi_cxx -lstdc++ 
+FLAGS=$(FLAGS_$(COMPILER)) $(OMP) $(I3E) $(OPTIONS) -I${PETSC_DIR}/include -lm -lstdc++ 
 CFLAGS=$(CFLAGS_$(COMPILER)) $(OMP) $(I3E) $(C_OPTIONS) -I${PETSC_DIR}/include -c
 MPI_COMPILER=mpif90
 C_MPI_COMPILER=mpicc

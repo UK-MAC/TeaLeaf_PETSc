@@ -14,7 +14,7 @@ SUBROUTINE tea_leaf()
   REAL(KIND=8) :: ry,rx, error
 
   INTEGER :: fields(NUM_FIELDS)
-  INTEGER :: numit                ! number of iterations taken
+  INTEGER :: numit,numit_cg,numit_cheby                ! number of iterations taken
   CHARACTER(len=30) :: n_char
 
   DO c=1,number_of_chunks
@@ -128,16 +128,21 @@ SUBROUTINE tea_leaf()
 
         !CALL printXVec('XVec.' // TRIM(adjustl(n_char)) // '.iter')
         !CALL printBVec('BVec.' // TRIM(adjustl(n_char)) // '.iter')
-        ! if(step .eq. 1) CALL printMatA('MatA.' // TRIM(adjustl(n_char)) // '.iter')
+        !if(step .eq. 1) CALL printMatA('MatA.' // TRIM(adjustl(n_char)) // '.iter')
 
         
         if(use_pgcg) then    
-          CALL solve_petsc_pgcg(eps,max_iters,numit)    ! Use Paul Garrett's Approach
+          !if(parallel%task .eq. 0) write(0,*) ' Using PGCG'
+          CALL solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby)  ! Use Paul Garrett's Approach
+          if(parallel%task .eq. 0) write(6,*) 'Achieved convergence in ', numit_cg ,' CG iterations and ', numit_cheby, ' Cheby Iterations'
+          if(parallel%task .eq. 0) write(6,*) 'Current Total Iterations is : ',  total_cg_iter, ' CG Iterations and ', total_cheby_iter, ' Chebyshev Iterations'
+
         else 
           CALL solve_petsc(numit)    ! Use Command Line Specified Approach
+          if(parallel%task .eq. 0) write(6,*) 'Achieved convergence in ', numit ,' iterations'
+          if(parallel%task .eq. 0) write(6,*) 'Current Total Iterations: ',  total_petsc_iter
         endif
-
-        if(parallel%task .eq. 0) write(6,*) 'Achieved convergence in ', numit ,' iterations'
+   
         CALL getSolution_petsc(c)
 
         !CALL printXVec('XVec.After.' // TRIM(adjustl(n_char)) // '.iter')
