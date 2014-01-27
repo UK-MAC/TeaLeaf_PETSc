@@ -110,7 +110,7 @@ CFLAGS=$(CFLAGS_$(COMPILER)) $(OMP) $(I3E) $(C_OPTIONS) -I${PETSC_DIR}/include -
 MPI_COMPILER=mpif90
 C_MPI_COMPILER=mpicc
 
-clover_leaf: c_lover *.f90 Makefile
+tea_leaf: c_lover *.f90 Makefile
 	$(MPI_COMPILER) $(FLAGS)	\
 	data.f90			\
 	definitions.f90			\
@@ -178,7 +178,7 @@ clover_leaf: c_lover *.f90 Makefile
 	$(LAPACK_DIR)/lib/liblapack.a \
 	$(LAPACK_DIR)/lib/libblas.a \
 	$(LAPACK_DIR)/lib/libtmglib.a \
-	-o clover_leaf; echo $(MESSAGE)
+	-o tea_leaf; echo $(MESSAGE)
 
 
 
@@ -196,4 +196,4 @@ c_lover: *.c Makefile
 	tea_leaf_kernel_c.c
 
 clean:
-	rm -f *.o *.mod *genmod* clover_leaf
+	rm -f *.o *.mod *genmod* tea_leaf
