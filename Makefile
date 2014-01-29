@@ -38,11 +38,8 @@
 #        make IEEE=1              # Will select debug options as long as a compiler is selected as well
 # e.g. make COMPILER=INTEL MPI_COMPILER=mpiifort C_MPI_COMPILER=mpiicc DEBUG=1 IEEE=1 # will compile with the intel compiler with intel debug and ieee flags included
 
-HYPRE_DIR=/home/jad/opt/hypre/2.8.0b/static/intel/12.0/openmpi/1.4.4/
-PETSC_DIR=/home/jad/opt/petsc/3.3-p6/nodebug/static/intel/12.0/openmpi/1.4.4/
-SPOOLES_DIR=/home/jad/opt/spooles/2.2/static/intel/12.0/openmpi/1.4.4/
-ML_DIR=/home/jad/opt/ml//6.2/static/intel/12.0/openmpi/1.4.4/
-LAPACK_DIR=/home/jad/opt/lapack/3.3.0/static/intel/12.0/
+PETSC_DIR=./libs/petsc
+LAPACK_DIR=/opt/lapack/3.4.2/intel-13.1.1.163
 
 #HYPRE_DIR=/home/jad/opt/hypre/2.8.0b/static/intel/12.0/mpich/1.4.1p1/
 #PETSC_DIR=/home/jad/opt/petsc/3.3-p6/nodebug/static/intel/12.0/mpich/1.4.1p1/
@@ -171,13 +168,8 @@ tea_leaf: c_lover *.f90 Makefile
 	advec_cell_kernel_c.o           \
 	tea_leaf_kernel_c.o             \
 	$(PETSC_DIR)/lib/libpetsc.a     \
-	$(SPOOLES_DIR)/lib/libspoolesMPI.a    \
-	$(SPOOLES_DIR)/lib/libspooles.a    \
-	$(HYPRE_DIR)/lib/libHYPRE.a     \
-	$(ML_DIR)/lib/libml.a           \
 	$(LAPACK_DIR)/lib/liblapack.a \
 	$(LAPACK_DIR)/lib/libblas.a \
-	$(LAPACK_DIR)/lib/libtmglib.a \
 	-o tea_leaf; echo $(MESSAGE)
 
 
