@@ -1,3 +1,28 @@
+!Crown Copyright 2014 AWE.
+!
+! This file is part of TeaLeaf.
+!
+! TeaLeaf is free software: you can redistribute it and/or modify it under 
+! the terms of the GNU General Public License as published by the 
+! Free Software Foundation, either version 3 of the License, or (at your option) 
+! any later version.
+!
+! TeaLeaf is distributed in the hope that it will be useful, but 
+! WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
+! FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more 
+! details.
+!
+! You should have received a copy of the GNU General Public License along with 
+! TeaLeaf. If not, see http://www.gnu.org/licenses/.
+
+!>  @brief Fortran mesh chunk generator
+!>  @author David Beckingsale, Wayne Gaudin
+!>  @details Generates the field data on a mesh chunk based on the user specified
+!>  input for the states.
+!>
+!>  Note that state one is always used as the background state, which is then
+!>  overwritten by further state definitions.
+
 MODULE generate_chunk_kernel_module
 
 CONTAINS
@@ -24,7 +49,8 @@ SUBROUTINE generate_chunk_kernel(x_min,x_max,y_min,y_max, &
                                  state_radius,            &
                                  state_geometry,          &
                                  g_rect,                  &
-                                 g_circ                   )
+                                 g_circ,                  &
+                                 g_point)
 
   IMPLICIT NONE
 
@@ -50,15 +76,16 @@ SUBROUTINE generate_chunk_kernel(x_min,x_max,y_min,y_max, &
   INTEGER     , DIMENSION(number_of_states) :: state_geometry
   INTEGER      :: g_rect
   INTEGER      :: g_circ
+  INTEGER      :: g_point
 
-  REAL(KIND=8) :: radius
+  REAL(KIND=8) :: radius,x_cent,y_cent
   INTEGER      :: state
 
   INTEGER      :: j,k,jt,kt
 
   ! State 1 is always the background state
 
-!$OMP PARALLEL
+!$OMP PARALLEL SHARED(x_cent,y_cent)
 !$OMP DO
   DO k=y_min-2,y_max+2
     DO j=x_min-2,x_max+2
@@ -91,13 +118,15 @@ SUBROUTINE generate_chunk_kernel(x_min,x_max,y_min,y_max, &
   DO state=2,number_of_states
 
 ! Could the velocity setting be thread unsafe?
+    x_cent=state_xmin(state)
+    y_cent=state_ymin(state)
 
-!$OMP DO PRIVATE(radius)
+!$OMP DO PRIVATE(radius,jt,kt)
     DO k=y_min-2,y_max+2
       DO j=x_min-2,x_max+2
         IF(state_geometry(state).EQ.g_rect ) THEN
-          IF(vertexx(j).GE.state_xmin(state).AND.vertexx(j).LT.state_xmax(state)) THEN
-            IF(vertexy(k).GE.state_ymin(state).AND.vertexy(k).LT.state_ymax(state)) THEN
+          IF(vertexx(j+1).GE.state_xmin(state).AND.vertexx(j).LT.state_xmax(state)) THEN
+            IF(vertexy(k+1).GE.state_ymin(state).AND.vertexy(k).LT.state_ymax(state)) THEN
               energy0(j,k)=state_energy(state)
               density0(j,k)=state_density(state)
               DO kt=k,k+1
@@ -109,8 +138,19 @@ SUBROUTINE generate_chunk_kernel(x_min,x_max,y_min,y_max, &
             ENDIF
           ENDIF
         ELSEIF(state_geometry(state).EQ.g_circ ) THEN
-          radius=SQRT(cellx(j)*cellx(j)+celly(k)*celly(k))
+          radius=SQRT((cellx(j)-x_cent)*(cellx(j)-x_cent)+(celly(k)-y_cent)*(celly(k)-y_cent))
           IF(radius.LE.state_radius(state))THEN
+            energy0(j,k)=state_energy(state)
+            density0(j,k)=state_density(state)
+            DO kt=k,k+1
+              DO jt=j,j+1
+                xvel0(jt,kt)=state_xvel(state)
+                yvel0(jt,kt)=state_yvel(state)
+              ENDDO
+            ENDDO
+          ENDIF
+        ELSEIF(state_geometry(state).EQ.g_point) THEN
+          IF(vertexx(j).EQ.x_cent .AND. vertexy(k).EQ.y_cent) THEN
             energy0(j,k)=state_energy(state)
             density0(j,k)=state_density(state)
             DO kt=k,k+1

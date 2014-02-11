@@ -1,2 +1,7 @@
 *.mod
-clover_leaf
+*.o
+*.vtk
+tea_leaf
+tea.out
+tea.in.tmp
+tea.visit

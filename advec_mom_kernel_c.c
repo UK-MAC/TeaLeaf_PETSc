@@ -1,3 +1,29 @@
+/*Crown Copyright 2014 AWE.
+*
+* This file is part of TeaLeaf.
+*
+* TeaLeaf is free software: you can redistribute it and/or modify it under
+* the terms of the GNU General Public License as published by the
+* Free Software Foundation, either version 3 of the License, or (at your option)
+* any later version.
+*
+* TeaLeaf is distributed in the hope that it will be useful, but
+* WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+* FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+* details.
+*
+* You should have received a copy of the GNU General Public License along with
+* TeaLeaf. If not, see http://www.gnu.org/licenses/. */
+
+/**
+ *  @brief C momentum advection kernel
+ *  @author David Beckingsale, Wayne Gaudin
+ *  @details Performs a second order advective remap on the vertex momentum
+ *  using van-Leer limiting and directional splitting.
+ *  Note that although pre_vol is only set and not used in the update, please
+ *  leave it in the method.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "ftocmacros.h"
@@ -56,7 +82,7 @@ void advec_mom_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
 #pragma omp parallel
  {
   if(mom_sweep==1){
-#pragma omp for  
+#pragma omp for private(j)
     for (k=y_min-2;k<=y_max+2;k++) {
 #pragma ivdep
       for (j=x_min-2;j<=x_max+2;j++) {
@@ -69,7 +95,7 @@ void advec_mom_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
       }
     }
   } else if(mom_sweep==2){
-#pragma omp for   
+#pragma omp for private(j)
     for (k=y_min-2;k<=y_max+2;k++) {
 #pragma ivdep
       for (j=x_min-2;j<=x_max+2;j++) {
@@ -82,7 +108,7 @@ void advec_mom_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
       }
     }
   } else if(mom_sweep==3){
-#pragma omp for      
+#pragma omp for private(j)
     for (k=y_min-2;k<=y_max+2;k++) {
 #pragma ivdep
       for (j=x_min-2;j<=x_max+2;j++) {
@@ -93,7 +119,7 @@ void advec_mom_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
       }
     }
   } else if(mom_sweep==4){
-#pragma omp for       
+#pragma omp for private(j)
     for (k=y_min-2;k<=y_max+2;k++) {
 #pragma ivdep
       for (j=x_min-2;j<=x_max+2;j++) {
@@ -106,7 +132,7 @@ void advec_mom_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
   }
 
   if(direction==1) {
-#pragma omp for
+#pragma omp for private(j)
     for (k=y_min;k<=y_max+1;k++) {
 #pragma ivdep
       for (j=x_min-2;j<=x_max+2;j++) {
@@ -117,7 +143,7 @@ void advec_mom_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
                                                              +mass_flux_x[FTNREF2D(j+1,k  ,x_max+5,x_min-2,y_min-2)]);
       }
     }
-#pragma omp for   
+#pragma omp for private(j)
     for (k=y_min;k<=y_max+1;k++) {
 #pragma ivdep
       for (j=x_min-1;j<=x_max+2;j++) {
@@ -132,7 +158,7 @@ void advec_mom_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
                                                                   *post_vol[FTNREF2D(j-1,k  ,x_max+5,x_min-2,y_min-2)]);
       }
     }
-#pragma omp for   
+#pragma omp for private(j)
     for (k=y_min;k<=y_max+1;k++) {
 #pragma ivdep
       for (j=x_min-1;j<=x_max+2;j++) {
@@ -141,7 +167,7 @@ void advec_mom_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
       }
     }
     if (vector==1) {
-#pragma omp for private(sigma,width,limiter,vdiffuw,vdiffdw,auw,adw,wind,sigma2,limiter2,vdiffuw2,vdiffdw2,auw2,wind2)
+#pragma omp for private(sigma,width,limiter,vdiffuw,vdiffdw,auw,adw,wind,sigma2,limiter2,vdiffuw2,vdiffdw2,auw2,wind2,j)
       for (k=y_min;k<=y_max+1;k++) {
 #pragma ivdep
         for (j=x_min-1;j<=x_max+1;j++) {
@@ -175,7 +201,7 @@ void advec_mom_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
         }
       }
     }else{
-#pragma omp for private(upwind,downwind,donor,dif,sigma,width,limiter,vdiffuw,vdiffdw,auw,adw,wind)
+#pragma omp for private(upwind,downwind,donor,dif,sigma,width,limiter,vdiffuw,vdiffdw,auw,adw,wind,j)
       for (k=y_min;k<=y_max+1;k++) {
         for (j=x_min-1;j<=x_max+1;j++) {
           if(node_flux[FTNREF2D(j  ,k  ,x_max+5,x_min-2,y_min-2)]<0.0){
@@ -209,7 +235,7 @@ void advec_mom_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
       }
     }
 
-#pragma omp for   
+#pragma omp for private(j)
     for (k=y_min;k<=y_max+1;k++) {
 #pragma ivdep
       for (j=x_min;j<=x_max+1;j++) {
@@ -222,7 +248,7 @@ void advec_mom_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
     }
   }
   else if(direction==2){
-#pragma omp for       
+#pragma omp for private(j)
     for (k=y_min-2;k<=y_max+2;k++) {
 #pragma ivdep
       for (j=x_min;j<=x_max+1;j++) {
@@ -233,7 +259,7 @@ void advec_mom_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
                                                              +mass_flux_y[FTNREF2D(j  ,k+1,x_max+4,x_min-2,y_min-2)]);
       }
     }
-#pragma omp for   
+#pragma omp for private(j)
     for (k=y_min-1;k<=y_max+2;k++) {
 #pragma ivdep
       for (j=x_min;j<=x_max+1;j++) {
@@ -248,7 +274,7 @@ void advec_mom_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
                                                                   *post_vol[FTNREF2D(j-1,k  ,x_max+5,x_min-2,y_min-2)]);
       }
     }
-#pragma omp for   
+#pragma omp for private(j)
     for (k=y_min-1;k<=y_max+2;k++) {
 #pragma ivdep
       for (j=x_min;j<=x_max+1;j++) {
@@ -257,10 +283,10 @@ void advec_mom_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
       }
     }
     if (vector==1) {
-#pragma omp for private(sigma,width,limiter,vdiffuw,vdiffdw,auw,adw,wind,sigma2,limiter2,vdiffuw2,vdiffdw2,auw2,wind2)
+#pragma omp for private(sigma,width,limiter,vdiffuw,vdiffdw,auw,adw,wind,sigma2,limiter2,vdiffuw2,vdiffdw2,auw2,wind2,j)
       for (k=y_min-1;k<=y_max+1;k++) {
 #pragma ivdep
-        for (j=x_min-2;j<=x_max+1;j++) {
+        for (j=x_min;j<=x_max+1;j++) {
           sigma=fabs(node_flux[FTNREF2D(j  ,k  ,x_max+5,x_min-2,y_min-2)])/(node_mass_pre[FTNREF2D(j  ,k+1,x_max+5,x_min-2,y_min-2)]);
           sigma2=fabs(node_flux[FTNREF2D(j  ,k  ,x_max+5,x_min-2,y_min-2)])/(node_mass_pre[FTNREF2D(j  ,k  ,x_max+5,x_min-2,y_min-2)]);
           width=celldy[FTNREF1D(k,x_min-2)];
@@ -291,9 +317,9 @@ void advec_mom_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
         }
       }
     }else{
-#pragma omp for private(upwind,downwind,donor,dif,sigma,width,limiter,vdiffuw,vdiffdw,auw,adw,wind)
+#pragma omp for private(upwind,downwind,donor,dif,sigma,width,limiter,vdiffuw,vdiffdw,auw,adw,wind,j)
       for (k=y_min-1;k<=y_max+1;k++) {
-        for (j=x_min-2;j<=x_max+1;j++) {
+        for (j=x_min;j<=x_max+1;j++) {
           if(node_flux[FTNREF2D(j  ,k  ,x_max+5,x_min-2,y_min-2)]<0.0){
             upwind=k+2;
             donor=k+1;
@@ -324,7 +350,7 @@ void advec_mom_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
         }
       }
     }
-#pragma omp for   
+#pragma omp for private(j)
     for (k=y_min;k<=y_max+1;k++) {
 #pragma ivdep
       for (j=x_min;j<=x_max+1;j++) {

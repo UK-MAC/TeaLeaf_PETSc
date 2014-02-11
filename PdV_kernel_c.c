@@ -1,3 +1,29 @@
+/*Crown Copyright 2014 AWE.
+*
+* This file is part of TeaLeaf.
+*
+* TeaLeaf is free software: you can redistribute it and/or modify it under
+* the terms of the GNU General Public License as published by the
+* Free Software Foundation, either version 3 of the License, or (at your option)
+* any later version.
+*
+* TeaLeaf is distributed in the hope that it will be useful, but
+* WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+* FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+* details.
+*
+* You should have received a copy of the GNU General Public License along with
+* TeaLeaf. If not, see http://www.gnu.org/licenses/. */
+
+/**
+ *  @brief C PdV kernel.
+ *  @author David Beckingsale, Wayne Gaudin
+ *  @details Calculates the change in energy and density in a cell using the
+ *  change on cell volume due to the velocity gradients in a cell. The time
+ *  level of the velocity data depends on whether it is invoked as the
+ *  predictor or corrector.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "ftocmacros.h"
@@ -36,7 +62,7 @@ void pdv_kernel_c_(int *prdct,
 
   if(predict==0) {
     
-#pragma omp for private(right_flux,left_flux,top_flux,bottom_flux,total_flux,min_cell_volume,energy_change,recip_volume)
+#pragma omp for private(right_flux,left_flux,top_flux,bottom_flux,total_flux,min_cell_volume,energy_change,recip_volume,j)
     for (k=y_min;k<=y_max;k++) {
 #pragma ivdep
       for (j=x_min;j<=x_max;j++) {
@@ -67,7 +93,7 @@ void pdv_kernel_c_(int *prdct,
 
         total_flux=right_flux-left_flux+top_flux-bottom_flux;
 
-        volume_change[FTNREF2D(j  ,k  ,x_max,x_min,y_min)]=volume[FTNREF2D(j  ,k  ,x_max+4,x_min-2,y_min-2)]
+        volume_change[FTNREF2D(j  ,k  ,x_max+5,x_min-2,y_min-2)]=volume[FTNREF2D(j  ,k  ,x_max+4,x_min-2,y_min-2)]
                                                          /(volume[FTNREF2D(j  ,k  ,x_max+4,x_min-2,y_min-2)]+total_flux);
 
         min_cell_volume=MIN(volume[FTNREF2D(j  ,k  ,x_max+4,x_min-2,y_min-2)]+right_flux-left_flux+top_flux-bottom_flux
@@ -83,13 +109,13 @@ void pdv_kernel_c_(int *prdct,
         energy1[FTNREF2D(j  ,k  ,x_max+4,x_min-2,y_min-2)]=energy0[FTNREF2D(j  ,k  ,x_max+4,x_min-2,y_min-2)]-energy_change;
 
         density1[FTNREF2D(j  ,k  ,x_max+4,x_min-2,y_min-2)]=density0[FTNREF2D(j  ,k  ,x_max+4,x_min-2,y_min-2)]
-                                                           *volume_change[FTNREF2D(j  ,k  ,x_max,x_min,y_min)];
+                                                           *volume_change[FTNREF2D(j  ,k  ,x_max+5,x_min-2,y_min-2)];
 
       }
     }
   }
   else{
-#pragma omp for private(right_flux,left_flux,top_flux,bottom_flux,total_flux,min_cell_volume,energy_change,recip_volume)
+#pragma omp for private(right_flux,left_flux,top_flux,bottom_flux,total_flux,min_cell_volume,energy_change,recip_volume,j)
     for (k=y_min;k<=y_max;k++) {
 #pragma ivdep
       for (j=x_min;j<=x_max;j++) {
@@ -120,7 +146,7 @@ void pdv_kernel_c_(int *prdct,
 
         total_flux=right_flux-left_flux+top_flux-bottom_flux;
 
-        volume_change[FTNREF2D(j  ,k  ,x_max,x_min,y_min)]=volume[FTNREF2D(j  ,k  ,x_max+4,x_min-2,y_min-2)]
+        volume_change[FTNREF2D(j  ,k  ,x_max+5,x_min-2,y_min-2)]=volume[FTNREF2D(j  ,k  ,x_max+4,x_min-2,y_min-2)]
                                                          /(volume[FTNREF2D(j  ,k  ,x_max+4,x_min-2,y_min-2)]+total_flux);
 
         min_cell_volume=MIN(volume[FTNREF2D(j  ,k  ,x_max+4,x_min-2,y_min-2)]+right_flux-left_flux+top_flux-bottom_flux
@@ -136,7 +162,7 @@ void pdv_kernel_c_(int *prdct,
         energy1[FTNREF2D(j  ,k  ,x_max+4,x_min-2,y_min-2)]=energy0[FTNREF2D(j  ,k  ,x_max+4,x_min-2,y_min-2)]-energy_change;
 
         density1[FTNREF2D(j  ,k  ,x_max+4,x_min-2,y_min-2)]=density0[FTNREF2D(j  ,k  ,x_max+4,x_min-2,y_min-2)]
-                                                           *volume_change[FTNREF2D(j  ,k  ,x_max,x_min,y_min)];
+                                                           *volume_change[FTNREF2D(j  ,k  ,x_max+5,x_min-2,y_min-2)];
 
       }
     }

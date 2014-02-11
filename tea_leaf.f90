@@ -1,180 +1,73 @@
-MODULE tea_leaf_module
+!Crown Copyright 2014 AWE.
+!
+! This file is part of TeaLeaf.
+!
+! TeaLeaf is free software: you can redistribute it and/or modify it under
+! the terms of the GNU General Public License as published by the
+! Free Software Foundation, either version 3 of the License, or (at your option)
+! any later version.
+!
+! TeaLeaf is distributed in the hope that it will be useful, but
+! WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+! FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+! details.
+!
+! You should have received a copy of the GNU General Public License along with
+! TeaLeaf. If not, see http://www.gnu.org/licenses/.
 
-CONTAINS
+!>  @brief TeaLeaf top level program: Invokes the main cycle
+!>  @author David Beckingsale, Wayne Gaudin
+!>  @details TeaLeaf in a proxy-app that solves the linear heat conduction
+!>  equations using an implicit finite volume method on a Cartesian grid.
+!>  The grid is staggered with internal energy, density, temperature and pressure at cell
+!>  centres and velocities on cell vertices.
+!>
+!>  The CloverLeaf hydrodynamics can also be invoked to produce a coupled conduction/advection system
+!>
+!>  It can be run in distributed mode using MPI.
+!>
+!>  It can use OpenMP, OpenACC on a compute device.
+!>
+!>  NOTE: that the proxy-app uses uniformly spaced mesh. The actual method will
+!>  work on a mesh with varying spacing to keep it relevant to it's parent code.
+!>  For this reason, optimisations should only be carried out on the software
+!>  that do not change the underlying numerical method. For example, the
+!>  volume, though constant for all cells, should remain array and not be
+!>  converted to a scalar.
+PROGRAM tea_leaf
 
-SUBROUTINE tea_leaf()
- 
   USE clover_module
-  USE tea_leaf_kernel_module
-  USE update_halo_module
 
   IMPLICIT NONE
+!$ INTEGER :: OMP_GET_NUM_THREADS,OMP_GET_THREAD_NUM
 
-  INTEGER :: c, n, j,k
-  REAL(KIND=8) :: ry,rx, error
+  CALL clover_init_comms()
 
-  INTEGER :: fields(NUM_FIELDS)
-  INTEGER :: numit,numit_cg,numit_cheby                ! number of iterations taken
-  CHARACTER(len=30) :: n_char
+!$OMP PARALLEL
+  IF(parallel%boss)THEN
+!$  IF(OMP_GET_THREAD_NUM().EQ.0) THEN
+      WRITE(*,*)
+      WRITE(*,'(a15,f8.3)') 'Tea Version ',g_version
+      WRITE(*,'(a18)') 'MPI Version'
+!$    WRITE(*,'(a18)') 'OpenMP Version'
+      WRITE(*,'(a14,i6)') 'Task Count ',parallel%max_task !MPI
+!$    WRITE(*,'(a15,i5)') 'Thread Count: ',OMP_GET_NUM_THREADS()
+      WRITE(*,*)
+      WRITE(0,*)
+      WRITE(0,'(a15,f8.3)') 'Tea Version ',g_version
+      WRITE(0,'(a18)') 'MPI Version'
+!$    WRITE(0,'(a18)') 'OpenMP Version'
+      WRITE(0,'(a14,i6)') 'Task Count ',parallel%max_task !MPI
+!$    WRITE(0,'(a15,i5)') 'Thread Count: ',OMP_GET_NUM_THREADS()
+      WRITE(0,*)
+!$  ENDIF
+  ENDIF
+!$OMP END PARALLEL
 
-  DO c=1,number_of_chunks
+  CALL initialise
 
-    IF(chunks(c)%task.EQ.parallel%task) THEN
-
-      fields=0
-      fields(FIELD_ENERGY1) = 1
-      fields(FIELD_DENSITY1) = 1
-      CALL update_halo(fields,2)
-
-      ! INIT - set up coefficients based on material temperature
-      IF(use_fortran_kernels) THEN
-          CALL tea_leaf_kernel_init(chunks(c)%field%x_min, &
-              chunks(c)%field%x_max,                       &
-              chunks(c)%field%y_min,                       &
-              chunks(c)%field%y_max,                       &
-              chunks(c)%field%celldx,                      &
-              chunks(c)%field%celldy,                      &
-              chunks(c)%field%volume,                      &
-              chunks(c)%field%density1,                    &
-              chunks(c)%field%energy1,                     &
-              chunks(c)%field%work_array1,                 &
-              chunks(c)%field%u,                           &
-              chunks(c)%field%work_array2,                 &
-              chunks(c)%field%work_array3,                 &
-              chunks(c)%field%work_array4,                 &
-              chunks(c)%field%work_array5,                 &
-              chunks(c)%field%work_array6,                 &
-              chunks(c)%field%work_array7,                 &
-              coefficient)
-      ELSEIF(use_C_kernels) THEN
-          CALL tea_leaf_kernel_init_c(chunks(c)%field%x_min, &
-              chunks(c)%field%x_max,                       &
-              chunks(c)%field%y_min,                       &
-              chunks(c)%field%y_max,                       &
-              chunks(c)%field%celldx,                      &
-              chunks(c)%field%celldy,                      &
-              chunks(c)%field%volume,                      &
-              chunks(c)%field%density1,                    &
-              chunks(c)%field%energy1,                     &
-              chunks(c)%field%work_array1,                 &
-              chunks(c)%field%u,                           &
-              chunks(c)%field%work_array2,                 &
-              chunks(c)%field%work_array3,                 &
-              chunks(c)%field%work_array4,                 &
-              chunks(c)%field%work_array5,                 &
-              chunks(c)%field%work_array6,                 &
-              chunks(c)%field%work_array7,                 &
-              coefficient)
-      ENDIF
-
-
-      ! JACOBI
-
-      rx = dt/(chunks(c)%field%celldx(chunks(c)%field%x_min)**2);
-      ry = dt/(chunks(c)%field%celldy(chunks(c)%field%y_min)**2);
-
-      IF(.not. use_PETSC_kernels) THEN
-        DO n=1,max_iters
-
-          IF(use_fortran_kernels) THEN
-              CALL tea_leaf_kernel_solve(chunks(c)%field%x_min,&
-                  chunks(c)%field%x_max,                       &
-                  chunks(c)%field%y_min,                       &
-                  chunks(c)%field%y_max,                       &
-                  rx,                                          &
-                  ry,                                          &
-                  chunks(c)%field%work_array6,                 &
-                  chunks(c)%field%work_array7,                 &
-                  error,                                       &
-                  chunks(c)%field%work_array1,                 &
-                  chunks(c)%field%u,                           &
-                  chunks(c)%field%work_array2)
-          ELSEIF(use_C_kernels) THEN
-              CALL tea_leaf_kernel_solve_c(chunks(c)%field%x_min,&
-                  chunks(c)%field%x_max,                       &
-                  chunks(c)%field%y_min,                       &
-                  chunks(c)%field%y_max,                       &
-                  rx,                                          &
-                  ry,                                          &
-                  chunks(c)%field%work_array6,                 &
-                  chunks(c)%field%work_array7,                 &
-                  error,                                       &
-                  chunks(c)%field%work_array1,                 &
-                  chunks(c)%field%u,                           &
-                  chunks(c)%field%work_array2)
-          ENDIF
-
-          ! CALL update_halo
-          fields=0
-          fields(FIELD_U) = 1
-          CALL update_halo(fields,2)
-
-          CALL clover_max(error)
-
-          IF (error .LT. eps) EXIT
-
-        ENDDO
-      ELSEIF (use_PETSC_kernels) THEN
-
-        ! Substitute for PETSc Solve
-
-		    ! write(6,*) 'Calling PETSc Object Population and Solve'
-
-        CALL setupMatA_petsc(c,rx,ry)
-        CALL setupRHS_petsc(c,rx,ry)
-        CALL setupSol_petsc(c,rx,ry)
-
-        write(n_char,'(I30)'),step
-
-        !CALL printXVec('XVec.' // TRIM(adjustl(n_char)) // '.iter')
-        !CALL printBVec('BVec.' // TRIM(adjustl(n_char)) // '.iter')
-        !if(step .eq. 1) CALL printMatA('MatA.' // TRIM(adjustl(n_char)) // '.iter')
-
-        
-        if(use_pgcg) then    
-          !if(parallel%task .eq. 0) write(0,*) ' Using PGCG'
-          CALL solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby)  ! Use Paul Garrett's Approach
-          if(parallel%task .eq. 0) write(6,*) 'Achieved convergence in ', numit_cg ,' CG iterations and ', numit_cheby, ' Cheby Iterations'
-          if(parallel%task .eq. 0) write(6,*) 'Current Total Iterations is : ',  total_cg_iter, ' CG Iterations and ', total_cheby_iter, ' Chebyshev Iterations'
-
-        else 
-          CALL solve_petsc(numit)    ! Use Command Line Specified Approach
-          if(parallel%task .eq. 0) write(6,*) 'Achieved convergence in ', numit ,' iterations'
-          if(parallel%task .eq. 0) write(6,*) 'Current Total Iterations: ',  total_petsc_iter
-        endif
-   
-        CALL getSolution_petsc(c)
-
-        !CALL printXVec('XVec.After.' // TRIM(adjustl(n_char)) // '.iter')
-      ENDIF
-
-      ! RESET
-      IF(use_fortran_kernels) THEN
-          CALL tea_leaf_kernel_finalise(chunks(c)%field%x_min, &
-              chunks(c)%field%x_max,                           &
-              chunks(c)%field%y_min,                           &
-              chunks(c)%field%y_max,                           &
-              chunks(c)%field%energy1,                         &
-              chunks(c)%field%density1,                        &
-              chunks(c)%field%u)
-      ELSEIF(use_C_kernels) THEN
-          CALL tea_leaf_kernel_finalise_c(chunks(c)%field%x_min, &
-              chunks(c)%field%x_max,                           &
-              chunks(c)%field%y_min,                           &
-              chunks(c)%field%y_max,                           &
-              chunks(c)%field%energy1,                         &
-              chunks(c)%field%density1,                        &
-              chunks(c)%field%u)
-      ENDIF
-
-      fields=0
-      fields(FIELD_ENERGY1) = 1
-      CALL update_halo(fields,1)
-
-    ENDIF
-
-  ENDDO
-
-END SUBROUTINE tea_leaf
-
-END MODULE tea_leaf_module
+  CALL hydro
+  
+  ! Deallocate everything
+  
+END PROGRAM tea_leaf

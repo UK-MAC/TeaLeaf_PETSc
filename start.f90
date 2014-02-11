@@ -1,3 +1,27 @@
+!Crown Copyright 2014 AWE.
+!
+! This file is part of TeaLeaf.
+!
+! TeaLeaf is free software: you can redistribute it and/or modify it under 
+! the terms of the GNU General Public License as published by the 
+! Free Software Foundation, either version 3 of the License, or (at your option) 
+! any later version.
+!
+! TeaLeaf is distributed in the hope that it will be useful, but 
+! WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
+! FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more 
+! details.
+!
+! You should have received a copy of the GNU General Public License along with 
+! TeaLeaf. If not, see http://www.gnu.org/licenses/.
+
+!>  @brief Main set up routine
+!>  @author David Beckingsale, Wayne Gaudin
+!>  @details Invokes the mesh decomposer and sets up chunk connectivity. It then
+!>  allocates the communication buffers and call the chunk initialisation and
+!>  generation routines. It calls the equation of state to calculate initial
+!>  pressure before priming the halo cells and writing an initial field summary.
+
 SUBROUTINE start
 
   USE clover_module
@@ -7,12 +31,14 @@ SUBROUTINE start
 
   IMPLICIT NONE
 
-  INTEGER :: c,j,k
+  INTEGER :: c
 
   INTEGER :: x_cells,y_cells
   INTEGER, ALLOCATABLE :: right(:),left(:),top(:),bottom(:)
 
   INTEGER :: fields(NUM_FIELDS)
+
+  LOGICAL :: profiler_off
 
   IF(parallel%boss)THEN
      WRITE(g_out,*) 'Setting up initial geometry'
@@ -98,6 +124,11 @@ SUBROUTINE start
 
   CALL clover_barrier
 
+  ! Do no profile the start up costs otherwise the total times will not add up
+  ! at the end
+  profiler_off=profiler_on
+  profiler_on=.FALSE.
+
   DO c = 1, number_of_chunks
     CALL ideal_gas(c,.FALSE.)
   END DO
@@ -127,5 +158,7 @@ SUBROUTINE start
   IF(visit_frequency.NE.0) CALL visit()
 
   CALL clover_barrier
+
+  profiler_on=profiler_off
 
 END SUBROUTINE start

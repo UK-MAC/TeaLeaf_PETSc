@@ -1,8 +1,29 @@
+!Crown Copyright 2014 AWE.
+!
+! This file is part of TeaLeaf.
+!
+! TeaLeaf is free software: you can redistribute it and/or modify it under 
+! the terms of the GNU General Public License as published by the 
+! Free Software Foundation, either version 3 of the License, or (at your option) 
+! any later version.
+!
+! TeaLeaf is distributed in the hope that it will be useful, but 
+! WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
+! FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more 
+! details.
+!
+! You should have received a copy of the GNU General Public License along with 
+! TeaLeaf. If not, see http://www.gnu.org/licenses/.
+
+!>  @brief Holds parameters definitions
+!>  @author David Beckingsale, Wayne Gaudin
+!>  @details Parameters used in the TeaLeaf are defined here.
+
 MODULE data_module
 
    IMPLICIT NONE
 
-   REAL(KIND=8), PARAMETER :: g_version=0.0
+   REAL(KIND=8), PARAMETER :: g_version=1.0
 
    INTEGER,      PARAMETER :: g_ibig=640000
 
@@ -39,7 +60,7 @@ MODULE data_module
                                 ,NUM_FIELDS       =16
 
    INTEGER,         PARAMETER :: CELL_DATA     = 1,        &
-                                 VERTEX_DATA   = 3,        &
+                                 VERTEX_DATA   = 2,        &
                                  X_FACE_DATA   = 3,        &
                                  y_FACE_DATA   = 4
 
@@ -51,13 +72,14 @@ MODULE data_module
                                 ,DIVERG= 4
 
    INTEGER,                      PARAMETER :: g_rect=1 &
-                                ,g_circ=2
+                                ,g_circ=2 &
+                                ,g_point=3
 
    INTEGER         ::            g_in           & ! File for input data.
                                 ,g_out
 
    INTEGER         ::            CONDUCTIVITY        = 1 &
-                                , RECIP_CONDUCTIVITY = 2
+                                ,RECIP_CONDUCTIVITY  = 2
 
 
    TYPE parallel_type

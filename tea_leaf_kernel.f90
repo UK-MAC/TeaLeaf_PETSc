@@ -1,3 +1,24 @@
+!Crown Copyright 2014 AWE.
+!
+! This file is part of TeaLeaf.
+!
+! TeaLeaf is free software: you can redistribute it and/or modify it under 
+! the terms of the GNU General Public License as published by the 
+! Free Software Foundation, either version 3 of the License, or (at your option) 
+! any later version.
+!
+! TeaLeaf is distributed in the hope that it will be useful, but 
+! WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
+! FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more 
+! details.
+!
+! You should have received a copy of the GNU General Public License along with 
+! TeaLeaf. If not, see http://www.gnu.org/licenses/.
+
+!>  @brief Fortran heat conduction kernel
+!>  @author David Beckingsale, Wayne Gaudin
+!>  @details Implicitly calculates the change in temperature using a Jacobi iteration
+
 MODULE tea_leaf_kernel_module
 
 CONTAINS
@@ -148,7 +169,7 @@ SUBROUTINE tea_leaf_kernel_solve(x_min,       &
         u1(j,k) = (u0(j,k) + Kx(j+1,k)*rx*un(j+1,k) + Kx(j,k)*rx*un(j-1,k) &
                            + Ky(j,k+1)*ry*un(j,k+1) + Ky(j,k)*ry*un(j,k-1)) &
                              /(1.0_8+2.0_8*(0.5_8*(Kx(j,k)+Kx(j+1,k)))*rx &
-                                +2.0_8*(0.5_8*(Ky(j,k)+Ky(j+1,k)))*ry)
+                                +2.0_8*(0.5_8*(Ky(j,k)+Ky(j,k+1)))*ry)
 
         error = MAX(error, ABS(u1(j,k)-u0(j,k)))
       ENDDO

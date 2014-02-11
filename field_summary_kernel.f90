@@ -1,3 +1,25 @@
+!Crown Copyright 2014 AWE.
+!
+! This file is part of TeaLeaf.
+!
+! TeaLeaf is free software: you can redistribute it and/or modify it under 
+! the terms of the GNU General Public License as published by the 
+! Free Software Foundation, either version 3 of the License, or (at your option) 
+! any later version.
+!
+! TeaLeaf is distributed in the hope that it will be useful, but 
+! WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
+! FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more 
+! details.
+!
+! You should have received a copy of the GNU General Public License along with 
+! TeaLeaf. If not, see http://www.gnu.org/licenses/.
+
+!>  @brief Fortran field summary kernel
+!>  @author David Beckingsale, Wayne Gaudin
+!>  @details The total mass, internal energy, kinetic energy, temperature and volume weighted
+!>  pressure for the chunk is calculated.
+
 MODULE field_summary_kernel_module
 
 CONTAINS
@@ -6,19 +28,21 @@ SUBROUTINE field_summary_kernel(x_min,x_max,y_min,y_max, &
                                 volume,                  &
                                 density0,                &
                                 energy0,                 &
+                                u,                       &
                                 pressure,                &
                                 xvel0,                   &
                                 yvel0,                   &
-                                vol,mass,ie,ke,press     )
+                                vol,mass,ie,ke,press,temp)
 
   IMPLICIT NONE
 
   INTEGER      :: x_min,x_max,y_min,y_max
   REAL(KIND=8), DIMENSION(x_min-2:x_max+2,y_min-2:y_max+2) :: volume
   REAL(KIND=8), DIMENSION(x_min-2:x_max+2,y_min-2:y_max+2) :: density0,energy0
+  REAL(KIND=8), DIMENSION(x_min-2:x_max+3,y_min-2:y_max+3) :: u
   REAL(KIND=8), DIMENSION(x_min-2:x_max+2,y_min-2:y_max+2) :: pressure
   REAL(KIND=8), DIMENSION(x_min-2:x_max+3,y_min-2:y_max+3) :: xvel0,yvel0
-  REAL(KIND=8) :: vol,mass,ie,ke,press
+  REAL(KIND=8) :: vol,mass,ie,ke,press,temp
 
   INTEGER      :: j,k,jv,kv
   REAL(KIND=8) :: vsqrd,cell_vol,cell_mass
@@ -28,9 +52,10 @@ SUBROUTINE field_summary_kernel(x_min,x_max,y_min,y_max, &
   ie=0.0
   ke=0.0
   press=0.0
+  temp=0.0
 
 !$OMP PARALLEL
-!$OMP DO PRIVATE(vsqrd,cell_vol,cell_mass) REDUCTION(+ : vol,mass,press,ie,ke)
+!$OMP DO PRIVATE(vsqrd,cell_vol,cell_mass) REDUCTION(+ : vol,mass,press,ie,ke,temp)
   DO k=y_min,y_max
     DO j=x_min,x_max
       vsqrd=0.0
@@ -46,6 +71,7 @@ SUBROUTINE field_summary_kernel(x_min,x_max,y_min,y_max, &
       ie=ie+cell_mass*energy0(j,k)
       ke=ke+cell_mass*0.5*vsqrd
       press=press+cell_vol*pressure(j,k)
+      temp=temp+cell_mass*u(j,k)
     ENDDO
   ENDDO
 !$OMP END DO

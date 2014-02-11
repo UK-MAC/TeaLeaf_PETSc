@@ -1,3 +1,25 @@
+!Crown Copyright 2014 AWE.
+!
+! This file is part of TeaLeaf.
+!
+! TeaLeaf is free software: you can redistribute it and/or modify it under 
+! the terms of the GNU General Public License as published by the 
+! Free Software Foundation, either version 3 of the License, or (at your option) 
+! any later version.
+!
+! TeaLeaf is distributed in the hope that it will be useful, but 
+! WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
+! FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more 
+! details.
+!
+! You should have received a copy of the GNU General Public License along with 
+! TeaLeaf. If not, see http://www.gnu.org/licenses/.
+
+!>  @brief Fortran cell advection kernel.
+!>  @author David Beckingsale, Wayne Gaudin
+!>  @details Performs a second order advective remap using van-Leer limiting
+!>  with directional splitting.
+
 MODULE advec_cell_kernel_module
 
 CONTAINS
@@ -55,7 +77,7 @@ SUBROUTINE advec_cell_kernel(x_min,       &
 
   REAL(KIND=8) :: sigma,sigmat,sigmav,sigmam,sigma3,sigma4
   REAL(KIND=8) :: diffuw,diffdw,limiter
-  REAL(KIND=8), PARAMETER :: one_by_six=1.0/6.0
+  REAL(KIND=8), PARAMETER :: one_by_six=1.0_8/6.0_8
 
 !$OMP PARALLEL
 
@@ -99,8 +121,8 @@ SUBROUTINE advec_cell_kernel(x_min,       &
         ENDIF
 
         sigmat=ABS(vol_flux_x(j,k))/pre_vol(donor,k)
-        sigma3=(1.0+sigmat)*(vertexdx(j)/vertexdx(dif))
-        sigma4=2.0-sigmat
+        sigma3=(1.0_8+sigmat)*(vertexdx(j)/vertexdx(dif))
+        sigma4=2.0_8-sigmat
 
         sigma=sigmat
         sigmav=sigmat
@@ -108,7 +130,7 @@ SUBROUTINE advec_cell_kernel(x_min,       &
         diffuw=density1(donor,k)-density1(upwind,k)
         diffdw=density1(downwind,k)-density1(donor,k)
         IF(diffuw*diffdw.GT.0.0)THEN
-          limiter=(1.0-sigmav)*SIGN(1.0_8,diffdw)*MIN(ABS(diffuw),ABS(diffdw)&
+          limiter=(1.0_8-sigmav)*SIGN(1.0_8,diffdw)*MIN(ABS(diffuw),ABS(diffdw)&
               ,one_by_six*(sigma3*ABS(diffuw)+sigma4*ABS(diffdw)))
         ELSE
           limiter=0.0
@@ -119,7 +141,7 @@ SUBROUTINE advec_cell_kernel(x_min,       &
         diffuw=energy1(donor,k)-energy1(upwind,k)
         diffdw=energy1(downwind,k)-energy1(donor,k)
         IF(diffuw*diffdw.GT.0.0)THEN
-          limiter=(1.0-sigmam)*SIGN(1.0_8,diffdw)*MIN(ABS(diffuw),ABS(diffdw)&
+          limiter=(1.0_8-sigmam)*SIGN(1.0_8,diffdw)*MIN(ABS(diffuw),ABS(diffdw)&
               ,one_by_six*(sigma3*ABS(diffuw)+sigma4*ABS(diffdw)))
         ELSE
           limiter=0.0
@@ -184,8 +206,8 @@ SUBROUTINE advec_cell_kernel(x_min,       &
         ENDIF
 
         sigmat=ABS(vol_flux_y(j,k))/pre_vol(j,donor)
-        sigma3=(1.0+sigmat)*(vertexdy(k)/vertexdy(dif))
-        sigma4=2.0-sigmat
+        sigma3=(1.0_8+sigmat)*(vertexdy(k)/vertexdy(dif))
+        sigma4=2.0_8-sigmat
 
         sigma=sigmat
         sigmav=sigmat
@@ -193,7 +215,7 @@ SUBROUTINE advec_cell_kernel(x_min,       &
         diffuw=density1(j,donor)-density1(j,upwind)
         diffdw=density1(j,downwind)-density1(j,donor)
         IF(diffuw*diffdw.GT.0.0)THEN
-          limiter=(1.0-sigmav)*SIGN(1.0_8,diffdw)*MIN(ABS(diffuw),ABS(diffdw)&
+          limiter=(1.0_8-sigmav)*SIGN(1.0_8,diffdw)*MIN(ABS(diffuw),ABS(diffdw)&
               ,one_by_six*(sigma3*ABS(diffuw)+sigma4*ABS(diffdw)))
         ELSE
           limiter=0.0
@@ -204,7 +226,7 @@ SUBROUTINE advec_cell_kernel(x_min,       &
         diffuw=energy1(j,donor)-energy1(j,upwind)
         diffdw=energy1(j,downwind)-energy1(j,donor)
         IF(diffuw*diffdw.GT.0.0)THEN
-          limiter=(1.0-sigmam)*SIGN(1.0_8,diffdw)*MIN(ABS(diffuw),ABS(diffdw)&
+          limiter=(1.0_8-sigmam)*SIGN(1.0_8,diffdw)*MIN(ABS(diffuw),ABS(diffdw)&
               ,one_by_six*(sigma3*ABS(diffuw)+sigma4*ABS(diffdw)))
         ELSE
           limiter=0.0

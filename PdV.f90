@@ -1,3 +1,24 @@
+!Crown Copyright 2014 AWE.
+!
+! This file is part of TeaLeaf.
+!
+! TeaLeaf is free software: you can redistribute it and/or modify it under 
+! the terms of the GNU General Public License as published by the 
+! Free Software Foundation, either version 3 of the License, or (at your option) 
+! any later version.
+!
+! TeaLeaf is distributed in the hope that it will be useful, but 
+! WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
+! FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more 
+! details.
+!
+! You should have received a copy of the GNU General Public License along with 
+! TeaLeaf. If not, see http://www.gnu.org/licenses/.
+
+!>  @brief Driver for the PdV update.
+!>  @author David Beckingsale, Wayne Gaudin
+!>  @details Invokes the user specified kernel for the PdV update.
+
 MODULE PdV_module
 
 CONTAINS
@@ -20,8 +41,11 @@ SUBROUTINE PdV(predict)
   INTEGER :: c
   INTEGER :: fields(NUM_FIELDS)
 
+  REAL(KIND=8) :: kernel_time,timer
+
   error_condition=0 ! Not used yet due to issue with OpenA reduction
 
+  IF(profiler_on) kernel_time=timer()
   DO c=1,number_of_chunks
 
     IF(chunks(c)%task.EQ.parallel%task) THEN
@@ -81,22 +105,29 @@ SUBROUTINE PdV(predict)
   ENDDO
 
   CALL clover_check_error(error_condition)
+  IF(profiler_on) profiler%PdV=profiler%PdV+(timer()-kernel_time)
 
   IF(error_condition.EQ.1) THEN
     CALL report_error('PdV','error in PdV')
   ENDIF
 
   IF(predict)THEN
+    IF(profiler_on) kernel_time=timer()
     DO c=1,number_of_chunks
       CALL ideal_gas(c,.TRUE.)
     ENDDO
+    IF(profiler_on) profiler%ideal_gas=profiler%ideal_gas+(timer()-kernel_time)
     fields=0
     fields(FIELD_PRESSURE)=1
+    IF(profiler_on) kernel_time=timer()
     CALL update_halo(fields,1)
+    IF(profiler_on) profiler%halo_exchange=profiler%halo_exchange+(timer()-kernel_time)
   ENDIF
 
   IF ( predict ) THEN
+    IF(profiler_on) kernel_time=timer()
     CALL revert()
+    IF(profiler_on) profiler%revert=profiler%revert+(timer()-kernel_time)
   ENDIF
 
 END SUBROUTINE PdV

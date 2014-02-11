@@ -1,3 +1,26 @@
+!Crown Copyright 2014 AWE.
+!
+! This file is part of TeaLeaf.
+!
+! TeaLeaf is free software: you can redistribute it and/or modify it under 
+! the terms of the GNU General Public License as published by the 
+! Free Software Foundation, either version 3 of the License, or (at your option) 
+! any later version.
+!
+! TeaLeaf is distributed in the hope that it will be useful, but 
+! WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
+! FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more 
+! details.
+!
+! You should have received a copy of the GNU General Public License along with 
+! TeaLeaf. If not, see http://www.gnu.org/licenses/.
+
+!>  @brief Reads the user input
+!>  @author David Beckingsale, Wayne Gaudin
+!>  @details Reads and parses the user input from the processed file and sets
+!>  the variables used in the generation phase. Default values are also set
+!>  here.
+
 SUBROUTINE read_input()
 
   USE clover_module
@@ -6,11 +29,13 @@ SUBROUTINE read_input()
 
   IMPLICIT NONE
 
-  INTEGER            :: state,stat,state_max
+  INTEGER            :: state,stat,state_max,n
+
+  REAL(KIND=8) :: dx,dy
 
   CHARACTER(LEN=500) :: word
 
-  CHARACTER(LEN=500) :: string
+  test_problem=0
 
   state_max=0
 
@@ -24,6 +49,7 @@ SUBROUTINE read_input()
 
   end_time=10.0
   end_step=g_ibig
+  complete=.FALSE.
 
   visit_frequency=0
   summary_frequency=10
@@ -37,22 +63,40 @@ SUBROUTINE read_input()
   dtv_safe=0.5
   dtdiv_safe=0.7
 
+  max_iters=1000
+  eps=1.0e-6
+
   use_fortran_kernels=.TRUE.
   use_C_kernels=.FALSE.
   use_OA_kernels=.FALSE.
   use_vector_loops=.FALSE.
-  use_TeaLeaf=.FALSE.
+  use_Hydro = .FALSE.
+  use_TeaLeaf=.TRUE.
   use_PETSC_kernels=.FALSE.
   max_iters = 1000
   eps = 10e-8
-  use_Hydro = .TRUE.
   coefficient = CONDUCTIVITY
   pgcg_cg_iter = 10
+  coefficient = CONDUCTIVITY
+  profiler_on=.FALSE.
+  profiler%timestep=0.0
+  profiler%acceleration=0.0
+  profiler%PdV=0.0
+  profiler%cell_advection=0.0
+  profiler%mom_advection=0.0
+  profiler%viscosity=0.0
+  profiler%ideal_gas=0.0
+  profiler%visit=0.0
+  profiler%summary=0.0
+  profiler%reset=0.0
+  profiler%revert=0.0
+  profiler%flux=0.0
+  profiler%halo_exchange=0.0
 
   IF(parallel%boss)WRITE(g_out,*) 'Reading input file'
   IF(parallel%boss)WRITE(g_out,*)
 
-  stat=parse_init(g_in,'*clover')
+  stat=parse_init(g_in,'*tea')
 
   DO
     stat=parse_getline(dummy)
@@ -71,7 +115,7 @@ SUBROUTINE read_input()
 
   IF(number_of_states.LT.1) CALL report_error('read_input','No states defined.')
 
-  stat=parse_init(g_in,'*clover')
+  stat=parse_init(g_in,'*tea')
 
   ALLOCATE(states(number_of_states))
   states(:)%defined=.FALSE.
@@ -143,14 +187,34 @@ SUBROUTINE read_input()
         use_OA_kernels=.TRUE.
       CASE('use_vector_loops')
         use_vector_loops=.TRUE.
-      CASE('use_tea_leaf')
+      CASE('profiler_on')
+        profiler_on=.TRUE.
+        IF(parallel%boss)WRITE(g_out,"(1x,a25)")'Profiler on'
+      CASE('tea_leaf_off')
+        use_Tealeaf=.FALSE.
+        IF(parallel%boss)WRITE(g_out,"(1x,a17)")'Conduction is off'
+      CASE('tea_leaf_on')
         use_Tealeaf=.TRUE.
+        IF(parallel%boss)WRITE(g_out,"(1x,a16)")'Conduction is on'
       CASE('tl_max_iters')
         max_iters = parse_getival(parse_getword(.TRUE.))
       CASE('tl_eps')
         eps = parse_getrval(parse_getword(.TRUE.))
-      CASE('no_hydro')
+      CASE('hydro_off')
         use_Hydro = .FALSE.
+        IF(parallel%boss)WRITE(g_out,"(1x,a12)")'Hydro is off'
+      CASE('hydro_on')
+        use_Hydro = .TRUE.
+        IF(parallel%boss)WRITE(g_out,"(1x,a11)")'Hydro is on'
+      CASE('tl_coefficient_density')
+        coefficient = CONDUCTIVITY
+        IF(parallel%boss)WRITE(g_out,"(1x,a29)")'Diffusion coefficient density'
+      CASE('tl_coefficient_inverrse_density')
+        coefficient = RECIP_CONDUCTIVITY
+        IF(parallel%boss)WRITE(g_out,"(1x,a40)")'Diffusion coefficient reciprocal density'
+      CASE('test_problem')
+        test_problem=parse_getival(parse_getword(.TRUE.))
+        IF(parallel%boss)WRITE(g_out,"(1x,a25,i12)")'test_problem',test_problem
       CASE('tl_coefficient')
         coefficient = parse_getival(parse_getword(.TRUE.))
         IF(parallel%boss)WRITE(g_out,"(1x,a25,i12)")'diffusion coefficient',coefficient
@@ -211,6 +275,9 @@ SUBROUTINE read_input()
             CASE("circle")
               states(state)%geometry=g_circ
               IF(parallel%boss)WRITE(g_out,"(1x,a25)")'state geometry circular'
+            CASE("point")
+              states(state)%geometry=g_point
+              IF(parallel%boss)WRITE(g_out,"(1x,a25)")'state geometry point'
             END SELECT
           END SELECT
         ENDDO
@@ -222,15 +289,30 @@ SUBROUTINE read_input()
   IF(parallel%boss) THEN
     WRITE(g_out,*)
     IF(use_fortran_kernels) THEN
-      WRITE(g_out,"(1x,a25)")'Using Fortran Kernels'
+      WRITE(g_out,"(1x,a)")'Using Fortran Kernels'
     ELSEIF(use_c_kernels) THEN
-      WRITE(g_out,"(1x,a25)")'Using C Kernels'
+      WRITE(g_out,"(1x,a)")'Using C Kernels'
     ELSEIF(use_oa_kernels) THEN
-      WRITE(g_out,"(1x,a25)")'Using OpenAcc Kernels'
+      WRITE(g_out,"(1x,a)")'Using OpenAcc Kernels'
     ENDIF
     WRITE(g_out,*)
     WRITE(g_out,*) 'Input read finished.'
     WRITE(g_out,*)
   ENDIF
+
+  ! If a state boundary falls exactly on a cell boundary then round off can
+  ! cause the state to be put one cell further that expected. This is compiler
+  ! /system dependent. To avoid this, a state boundary is reduced/increased by a 100th
+  ! of a cell width so it lies well with in the intended cell.
+  ! Because a cell is either full or empty of a specified state, this small
+  ! modification to the state extents does not change the answers.
+  dx=(grid%xmax-grid%xmin)/float(grid%x_cells)
+  dy=(grid%ymax-grid%ymin)/float(grid%y_cells)
+  DO n=2,number_of_states
+    states(n)%xmin=states(n)%xmin+(dx/100.0)
+    states(n)%ymin=states(n)%ymin+(dy/100.0)
+    states(n)%xmax=states(n)%xmax-(dx/100.0)
+    states(n)%ymax=states(n)%ymax-(dy/100.0)
+  ENDDO
 
 END SUBROUTINE read_input

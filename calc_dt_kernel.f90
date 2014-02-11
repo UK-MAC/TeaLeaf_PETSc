@@ -1,3 +1,26 @@
+!Crown Copyright 2014 AWE.
+!
+! This file is part of TeaLeaf.
+!
+! TeaLeaf is free software: you can redistribute it and/or modify it under 
+! the terms of the GNU General Public License as published by the 
+! Free Software Foundation, either version 3 of the License, or (at your option) 
+! any later version.
+!
+! TeaLeaf is distributed in the hope that it will be useful, but 
+! WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
+! FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more 
+! details.
+!
+! You should have received a copy of the GNU General Public License along with 
+! TeaLeaf. If not, see http://www.gnu.org/licenses/.
+
+!>  @brief Fortran timestep kernel
+!>  @author David Beckingsale, Wayne Gaudin
+!>  @details Calculates the minimum timestep on the mesh chunk based on the CFL
+!>  condition, the velocity gradient and the velocity divergence. A safety
+!>  factor is used to ensure numerical stability.
+
 MODULE calc_dt_kernel_module
 
 CONTAINS
@@ -59,12 +82,11 @@ SUBROUTINE calc_dt_kernel(x_min,x_max,y_min,y_max,             &
 
   REAL(KIND=8)     :: div,dsx,dsy,dtut,dtvt,dtct,dtdivt,cc,dv1,dv2,jk_control
 
-!$OMP PARALLEL
-
   small=0
-
   dt_min_val = g_big
   jk_control=1.1
+
+!$OMP PARALLEL
 
 !$OMP DO PRIVATE(dsx,dsy,cc,dv1,dv2,div,dtct,dtut,dtvt,dtdivt)
   DO k=y_min,y_max
@@ -73,8 +95,8 @@ SUBROUTINE calc_dt_kernel(x_min,x_max,y_min,y_max,             &
        dsx=celldx(j)
        dsy=celldy(k)
 
-       cc=soundspeed(j,k)**2
-       cc=cc+2.0*viscosity(j,k)/density0(j,k)
+       cc=soundspeed(j,k)*soundspeed(j,k)
+       cc=cc+2.0_8*viscosity(j,k)/density0(j,k)
        cc=MAX(SQRT(cc),g_small)
 
        dtct=dtc_safe*MIN(dsx,dsy)/cc
@@ -86,19 +108,19 @@ SUBROUTINE calc_dt_kernel(x_min,x_max,y_min,y_max,             &
 
        div=div+dv2-dv1
 
-       dtut=dtu_safe*2.0*volume(j,k)/MAX(ABS(dv1),ABS(dv2),g_small*volume(j,k))
+       dtut=dtu_safe*2.0_8*volume(j,k)/MAX(ABS(dv1),ABS(dv2),g_small*volume(j,k))
 
        dv1=(yvel0(j,k  )+yvel0(j+1,k  ))*yarea(j,k  )
        dv2=(yvel0(j,k+1)+yvel0(j+1,k+1))*yarea(j,k+1)
 
        div=div+dv2-dv1
 
-       dtvt=dtv_safe*2.0*volume(j,k)/MAX(ABS(dv1),ABS(dv2),g_small*volume(j,k))
+       dtvt=dtv_safe*2.0_8*volume(j,k)/MAX(ABS(dv1),ABS(dv2),g_small*volume(j,k))
 
-       div=div/(2.0*volume(j,k))
+       div=div/(2.0_8*volume(j,k))
 
        IF(div.LT.-g_small)THEN
-         dtdivt=dtdiv_safe*(-1.0/div)
+         dtdivt=dtdiv_safe*(-1.0_8/div)
        ELSE
          dtdivt=g_big
        ENDIF

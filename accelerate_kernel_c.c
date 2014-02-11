@@ -1,3 +1,27 @@
+/*Crown Copyright 2014 AWE.
+*
+* This file is part of TeaLeaf.
+*
+* TeaLeaf is free software: you can redistribute it and/or modify it under 
+* the terms of the GNU General Public License as published by the 
+* Free Software Foundation, either version 3 of the License, or (at your option) 
+* any later version.
+*
+* TeaLeaf is distributed in the hope that it will be useful, but 
+* WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or 
+* FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more 
+* details.
+*
+* You should have received a copy of the GNU General Public License along with 
+* TeaLeaf. If not, see http://www.gnu.org/licenses/. */
+
+/**
+ *  @brief C acceleration kernel
+ *  @author David Beckingsale, Wayne Gaudin
+ *  @details The pressure and viscosity gradients are used to update the
+ *  velocity field.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include "ftocmacros.h"
@@ -29,7 +53,7 @@ void accelerate_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
 #pragma omp parallel
  {
 
-#pragma omp for private(nodal_mass)
+#pragma omp for private(nodal_mass,j)
   for (k=y_min;k<=y_max+1;k++) {
 #pragma ivdep
     for (j=x_min;j<=x_max+1;j++) {
@@ -42,7 +66,7 @@ void accelerate_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
     }
   }
 
-#pragma omp for
+#pragma omp for private(j)
   for (k=y_min;k<=y_max+1;k++) {
 #pragma ivdep
     for (j=x_min;j<=x_max+1;j++) {
@@ -55,7 +79,7 @@ void accelerate_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
     }
   }
 
-#pragma omp for
+#pragma omp for private(j)
   for (k=y_min;k<=y_max+1;k++) {
 #pragma ivdep
     for (j=x_min;j<=x_max+1;j++) {
@@ -68,7 +92,7 @@ void accelerate_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
     }
   }
 
-#pragma omp for
+#pragma omp for private(j)
   for (k=y_min;k<=y_max+1;k++) {
 #pragma ivdep
     for (j=x_min;j<=x_max+1;j++) {
@@ -81,7 +105,7 @@ void accelerate_kernel_c_(int *xmin,int *xmax,int *ymin,int *ymax,
     }
   }
 
-#pragma omp for
+#pragma omp for private(j)
   for (k=y_min;k<=y_max+1;k++) {
 #pragma ivdep
     for (j=x_min;j<=x_max+1;j++) {
