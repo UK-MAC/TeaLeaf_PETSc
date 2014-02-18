@@ -3,7 +3,7 @@ export LC_ALL=C
 
 BLAS_DIR=
 MPI_DIR=
-PREFIX=
+PREFIX=.
 
 ./configure --with-prefix=${PREFIX} --with-c++-support=1 --with-c-support=1 \
   --with-fortran=1 --with-x11=no --with-mpi=1 --with-hypre=0 --with=spooles=0 \
