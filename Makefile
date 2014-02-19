@@ -60,6 +60,7 @@
 # e.g. make COMPILER=INTEL MPI_COMPILER=mpiifort C_MPI_COMPILER=mpiicc DEBUG=1 IEEE=1 # will compile with the intel compiler with intel debug and ieee flags included
 
 PETSC_DIR=./libs/petsc
+PETSC_DIR=./petsc-3.4.3/linux-static/
 LAPACK_DIR=/opt/lapack/3.4.2/intel-13.1.1.163
 
 #HYPRE_DIR=/home/jad/opt/hypre/2.8.0b/static/intel/12.0/mpich/1.4.1p1/
@@ -72,7 +73,7 @@ ifndef COMPILER
   MESSAGE=select a compiler to compile in OpenMP, e.g. make COMPILER=INTEL
 endif
 
-OMP_INTEL     =
+OMP_INTEL     = -openmp
 OMP_SUN       = -xopenmp=parallel -vpara
 OMP_GNU       = -fopenmp
 OMP_CRAY      =
@@ -81,7 +82,7 @@ OMP_PATHSCALE = -mp
 OMP_XL        = -qsmp=omp -qthreaded
 OMP=$(OMP_$(COMPILER))
 
-FLAGS_INTEL     = -O3 -ipo -no-prec-div
+FLAGS_INTEL     = -O3 -ipo -no-prec-div -fpp
 FLAGS_SUN       = -fast -xipo=2 -Xlistv4
 FLAGS_GNU       = -O3 -march=native -funroll-loops
 FLAGS_CRAY      = -em -ra -h acc_model=fast_addr:no_deep_copy:auto_async_all
@@ -128,7 +129,7 @@ ifdef IEEE
 endif
 
 #FLAGS=$(FLAGS_$(COMPILER)) $(OMP) $(I3E) $(OPTIONS) -I${PETSC_DIR}/include -lm -lmpi_cxx -lstdc++ 
-FLAGS=$(FLAGS_$(COMPILER)) $(OMP) $(I3E) $(OPTIONS) -I${PETSC_DIR}/include -lm -lstdc++ 
+FLAGS=$(FLAGS_$(COMPILER)) $(OMP) $(I3E) $(OPTIONS) -I${PETSC_DIR}/include -I./include -lm -lstdc++ 
 CFLAGS=$(CFLAGS_$(COMPILER)) $(OMP) $(I3E) $(C_OPTIONS) -I${PETSC_DIR}/include -c
 MPI_COMPILER=mpif90
 C_MPI_COMPILER=mpicc
