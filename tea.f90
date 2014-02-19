@@ -36,6 +36,7 @@ SUBROUTINE tea_leaf()
   REAL(KIND=8) :: ry,rx, error
 
   INTEGER :: fields(NUM_FIELDS)
+  INTEGER :: numit,numit_cg,NUMIT_CHEBY,n_char
 
   REAL(KIND=8) :: kernel_time,timer
 
