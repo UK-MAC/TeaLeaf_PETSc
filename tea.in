@@ -17,4 +17,5 @@ end_time=1.0
 end_step=87
 tl_max_iters=10000
  test_problem 1
+use_petsc
 *endtea
