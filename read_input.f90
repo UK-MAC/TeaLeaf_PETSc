@@ -64,7 +64,7 @@ SUBROUTINE read_input()
   dtdiv_safe=0.7
 
   max_iters=1000
-  eps=1.0e-6
+  eps=1.0e-10
 
   use_fortran_kernels=.TRUE.
   use_C_kernels=.FALSE.
@@ -73,9 +73,6 @@ SUBROUTINE read_input()
   use_Hydro = .FALSE.
   use_TeaLeaf=.TRUE.
   use_PETSC_kernels=.FALSE.
-  max_iters = 1000
-  eps = 10e-8
-  coefficient = CONDUCTIVITY
   pgcg_cg_iter = 10
   coefficient = CONDUCTIVITY
   profiler_on=.FALSE.
