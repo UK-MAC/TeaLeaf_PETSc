@@ -23,7 +23,7 @@
 
 SUBROUTINE read_input()
 
-  USE clover_module
+  USE tea_module
   USE parse_module
   USE report_module
 
@@ -55,40 +55,34 @@ SUBROUTINE read_input()
   summary_frequency=10
 
   dtinit=0.1
-  dtmax=1.0
-  dtmin=0.0000001
-  dtrise=1.5
-  dtc_safe=0.7
-  dtu_safe=0.5
-  dtv_safe=0.5
-  dtdiv_safe=0.7
 
   max_iters=1000
   eps=1.0e-10
 
   use_fortran_kernels=.TRUE.
-  use_C_kernels=.FALSE.
-  use_OA_kernels=.FALSE.
-  use_vector_loops=.FALSE.
-  use_Hydro = .FALSE.
-  use_TeaLeaf=.TRUE.
-  use_PETSC_kernels=.FALSE.
-  pgcg_cg_iter = 10
   coefficient = CONDUCTIVITY
   profiler_on=.FALSE.
   profiler%timestep=0.0
-  profiler%acceleration=0.0
-  profiler%PdV=0.0
-  profiler%cell_advection=0.0
-  profiler%mom_advection=0.0
-  profiler%viscosity=0.0
-  profiler%ideal_gas=0.0
   profiler%visit=0.0
   profiler%summary=0.0
-  profiler%reset=0.0
-  profiler%revert=0.0
-  profiler%flux=0.0
   profiler%halo_exchange=0.0
+  profiler%tea_init=0.0
+  profiler%tea_solve=0.0
+  profiler%tea_reset=0.0
+  profiler%dot_product=0.0
+
+  tl_ch_cg_errswitch = .FALSE.
+  tl_ch_cg_presteps = 30
+  tl_ch_cg_epslim = 1e-5
+  tl_check_result = .FALSE.
+  tl_ppcg_inner_steps = 10 ! Ideally this should be the root of the condition number (usually +10%)
+  tl_preconditioner_on = .FALSE.
+
+  tl_use_chebyshev = .FALSE.
+  tl_use_cg = .FALSE.
+  tl_use_ppcg = .FALSE.
+  tl_use_jacobi = .TRUE.
+  verbose_on = .FALSE.
 
   IF(parallel%boss)WRITE(g_out,*) 'Reading input file'
   IF(parallel%boss)WRITE(g_out,*)
@@ -118,8 +112,6 @@ SUBROUTINE read_input()
   states(:)%defined=.FALSE.
   states(:)%energy=0.0
   states(:)%density=0.0
-  states(:)%xvel=0.0
-  states(:)%yvel=0.0
 
   DO
     stat=parse_getline(dummy)
@@ -134,12 +126,6 @@ SUBROUTINE read_input()
       CASE('initial_timestep')
         dtinit=parse_getrval(parse_getword(.TRUE.))
         IF(parallel%boss)WRITE(g_out,"(1x,a25,e12.4)")'initial_timestep ',dtinit
-      CASE('max_timestep')
-        dtmax=parse_getrval(parse_getword(.TRUE.))
-        IF(parallel%boss)WRITE(g_out,"(1x,a25,e12.4)")'max_timestep',dtinit
-      CASE('timestep_rise')
-        dtrise=parse_getrval(parse_getword(.TRUE.))
-        IF(parallel%boss)WRITE(g_out,"(1x,a25,e12.4)")'timestep_rise',dtrise
       CASE('end_time')
         end_time=parse_getrval(parse_getword(.TRUE.))
         IF(parallel%boss)WRITE(g_out,"(1x,a25,e12.4)")'end_time',end_time
@@ -170,57 +156,61 @@ SUBROUTINE read_input()
       CASE('summary_frequency')
         summary_frequency=parse_getival(parse_getword(.TRUE.))
         IF(parallel%boss)WRITE(g_out,"(1x,a25,i12)")'summary_frequency',summary_frequency
+      CASE('tl_ch_cg_presteps')
+        tl_ch_cg_presteps=parse_getival(parse_getword(.TRUE.))
+        IF(parallel%boss)WRITE(g_out,"(1x,a25,i12)")'tl_ch_cg_presteps',tl_ch_cg_presteps
+      CASE('tl_ppcg_inner_steps')
+        tl_ppcg_inner_steps=parse_getival(parse_getword(.TRUE.))
+        IF(parallel%boss)WRITE(g_out,"(1x,a25,i12)")'tl_ppcg_inner_steps',tl_ppcg_inner_steps
+      CASE('tl_ch_cg_epslim')
+        tl_ch_cg_epslim=parse_getrval(parse_getword(.TRUE.))
+        IF(parallel%boss)WRITE(g_out,"(1x,a25,e12.4)")'tl_ch_cg_epslim',tl_ch_cg_epslim
+      CASE('tl_check_result')
+        tl_check_result = .TRUE.
+      CASE('tl_ch_cg_errswitch')
+        tl_ch_cg_errswitch = .TRUE.
+      CASE('tl_preconditioner_on')
+        tl_preconditioner_on = .TRUE.
       CASE('use_fortran_kernels')
         use_fortran_kernels=.TRUE.
-        use_C_kernels=.FALSE.
-        use_OA_kernels=.FALSE.
-      CASE('use_c_kernels')
-        use_fortran_kernels=.FALSE.
-        use_C_kernels=.TRUE.
-        use_OA_kernels=.FALSE.
-      CASE('use_oa_kernels')
-        use_fortran_kernels=.FALSE.
-        use_C_kernels=.FALSE.
-        use_OA_kernels=.TRUE.
-      CASE('use_vector_loops')
-        use_vector_loops=.TRUE.
+      CASE('verbose_on')
+        verbose_on=.TRUE.
+      CASE('tl_use_jacobi')
+        tl_use_chebyshev = .FALSE.
+        tl_use_cg = .FALSE.
+        tl_use_ppcg=.FALSE.
+        tl_use_jacobi = .TRUE.
+      CASE('tl_use_cg')
+        tl_use_chebyshev = .FALSE.
+        tl_use_cg = .TRUE.
+        tl_use_ppcg=.FALSE.
+        tl_use_jacobi = .FALSE.
+      CASE('tl_use_ppcg')
+        tl_use_chebyshev = .FALSE.
+        tl_use_cg = .FALSE.
+        tl_use_ppcg=.TRUE.
+        tl_use_jacobi = .FALSE.
+      CASE('tl_use_chebyshev')
+        tl_use_chebyshev = .TRUE.
+        tl_use_cg = .FALSE.
+        tl_use_ppcg=.FALSE.
+        tl_use_jacobi = .FALSE.
       CASE('profiler_on')
         profiler_on=.TRUE.
         IF(parallel%boss)WRITE(g_out,"(1x,a25)")'Profiler on'
-      CASE('tea_leaf_off')
-        use_Tealeaf=.FALSE.
-        IF(parallel%boss)WRITE(g_out,"(1x,a17)")'Conduction is off'
-      CASE('tea_leaf_on')
-        use_Tealeaf=.TRUE.
-        IF(parallel%boss)WRITE(g_out,"(1x,a16)")'Conduction is on'
       CASE('tl_max_iters')
         max_iters = parse_getival(parse_getword(.TRUE.))
       CASE('tl_eps')
         eps = parse_getrval(parse_getword(.TRUE.))
-      CASE('hydro_off')
-        use_Hydro = .FALSE.
-        IF(parallel%boss)WRITE(g_out,"(1x,a12)")'Hydro is off'
-      CASE('hydro_on')
-        use_Hydro = .TRUE.
-        IF(parallel%boss)WRITE(g_out,"(1x,a11)")'Hydro is on'
       CASE('tl_coefficient_density')
         coefficient = CONDUCTIVITY
         IF(parallel%boss)WRITE(g_out,"(1x,a29)")'Diffusion coefficient density'
-      CASE('tl_coefficient_inverrse_density')
+      CASE('tl_coefficient_inverse_density')
         coefficient = RECIP_CONDUCTIVITY
         IF(parallel%boss)WRITE(g_out,"(1x,a40)")'Diffusion coefficient reciprocal density'
       CASE('test_problem')
         test_problem=parse_getival(parse_getword(.TRUE.))
         IF(parallel%boss)WRITE(g_out,"(1x,a25,i12)")'test_problem',test_problem
-      CASE('tl_coefficient')
-        coefficient = parse_getival(parse_getword(.TRUE.))
-        IF(parallel%boss)WRITE(g_out,"(1x,a25,i12)")'diffusion coefficient',coefficient
-      CASE('use_petsc')
-        use_PETSC_kernels = .TRUE.
-      CASE('use_pgcg')
-        use_pgcg = .TRUE.
-      CASE('pgcg_cg_iter')
-        pgcg_cg_iter = parse_getival(parse_getword(.TRUE.))
       CASE('state')
 
         state=parse_getival(parse_getword(.TRUE.))
@@ -236,12 +226,6 @@ SUBROUTINE read_input()
 
           SELECT CASE(word)
 
-          CASE('xvel')
-            states(state)%xvel=parse_getrval(parse_getword(.TRUE.))
-            IF(parallel%boss)WRITE(g_out,"(1x,a25,e12.4)")'xvel ',states(state)%xvel
-          CASE('yvel')
-            states(state)%yvel=parse_getrval(parse_getword(.TRUE.))
-            IF(parallel%boss)WRITE(g_out,"(1x,a25,e12.4)")'yvel ',states(state)%yvel
           CASE('xmin')
             states(state)%xmin=parse_getrval(parse_getword(.TRUE.))
             IF(parallel%boss)WRITE(g_out,"(1x,a25,e12.4)")'state xmin ',states(state)%xmin
@@ -287,10 +271,6 @@ SUBROUTINE read_input()
     WRITE(g_out,*)
     IF(use_fortran_kernels) THEN
       WRITE(g_out,"(1x,a)")'Using Fortran Kernels'
-    ELSEIF(use_c_kernels) THEN
-      WRITE(g_out,"(1x,a)")'Using C Kernels'
-    ELSEIF(use_oa_kernels) THEN
-      WRITE(g_out,"(1x,a)")'Using OpenAcc Kernels'
     ENDIF
     WRITE(g_out,*)
     WRITE(g_out,*) 'Input read finished.'
