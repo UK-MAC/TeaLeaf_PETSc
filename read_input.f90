@@ -83,6 +83,9 @@ SUBROUTINE read_input()
   tl_use_ppcg = .FALSE.
   tl_use_jacobi = .TRUE.
   verbose_on = .FALSE.
+  use_PETSC_kernels=.FALSE.
+  use_pgcg=.FALSE.
+  pgcg_cg_iter = 10
 
   IF(parallel%boss)WRITE(g_out,*) 'Reading input file'
   IF(parallel%boss)WRITE(g_out,*)
@@ -198,6 +201,12 @@ SUBROUTINE read_input()
       CASE('profiler_on')
         profiler_on=.TRUE.
         IF(parallel%boss)WRITE(g_out,"(1x,a25)")'Profiler on'
+      CASE('use_petsc')
+        use_PETSC_kernels = .TRUE.
+      CASE('use_pgcg')
+        use_pgcg = .TRUE.
+      CASE('pgcg_cg_iter')
+        pgcg_cg_iter = parse_getival(parse_getword(.TRUE.))
       CASE('tl_max_iters')
         max_iters = parse_getival(parse_getword(.TRUE.))
       CASE('tl_eps')

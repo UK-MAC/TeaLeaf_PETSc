@@ -70,9 +70,15 @@ MODULE definitions_module
    LOGICAL      :: tl_use_ppcg
    LOGICAL      :: tl_use_jacobi
    LOGICAL      :: verbose_on
+   LOGICAL      :: use_PETSC_kernels
+   LOGICAL      :: use_ppcg
    INTEGER      :: max_iters
+   INTEGER      :: pgcg_cg_iter
    REAL(KIND=8) :: eps
    INTEGER      :: coefficient
+   INTEGER      :: total_cheby_iter
+   INTEGER      :: total_cg_iter
+   INTEGER      :: total_petsc_iter
 
    ! for chebyshev solver - whether to run cg until a certain error (tl_ch_eps)
    ! is reached, or for a certain number of steps (tl_ch_cg_presteps)
@@ -109,6 +115,11 @@ MODULE definitions_module
    REAL(KIND=8) :: end_time
 
    INTEGER      :: end_step
+
+   INTEGER             :: px   ! Processor Decomposition in X Domain
+   INTEGER             :: py   ! Processor Decomposition in Y Domain
+   INTEGER,ALLOCATABLE :: lx(:)! Mesh Decomposition in X Domain
+   INTEGER,ALLOCATABLE :: ly(:)! Mesh Decomposition in Y Domain
 
    REAL(KIND=8) :: dt             &
                   ,time           &

@@ -34,6 +34,7 @@ MODULE tea_module
   USE data_module
   USE definitions_module
   USE MPI
+  USE PETScTeaLeaf
 
   IMPLICIT NONE
 
@@ -63,6 +64,9 @@ SUBROUTINE tea_finalize
   CALL FLUSH(0)
   CALL FLUSH(6)
   CALL FLUSH(g_out)
+  IF(use_PETSC_kernels) THEN
+    CALL cleanup_petsc()
+  ENDIF
   CALL MPI_FINALIZE(err)
 
 END SUBROUTINE tea_finalize
@@ -121,6 +125,7 @@ SUBROUTINE tea_decompose(x_cells,y_cells,left,right,bottom,top)
   INTEGER  :: chunk_x,chunk_y,mod_x,mod_y,split_found
 
   INTEGER  :: cx,cy,chunk,add_x,add_y,add_x_prev,add_y_prev
+  INTEGER  :: lft,rght,tp,bttm
 
   ! 2D Decomposition of the mesh
 
@@ -161,6 +166,9 @@ SUBROUTINE tea_decompose(x_cells,y_cells,left,right,bottom,top)
 
   ! Set up chunk mesh ranges and chunk connectivity
 
+    ALLOCATE(lx(chunk_x))
+    ALLOCATE(ly(chunk_y))
+
     add_x_prev=0
     add_y_prev=0
     chunk=1
@@ -187,6 +195,14 @@ SUBROUTINE tea_decompose(x_cells,y_cells,left,right,bottom,top)
                 IF(cy.EQ.1)       chunks(1)%chunk_neighbours(chunk_bottom)=external_face
                 IF(cy.EQ.chunk_y) chunks(1)%chunk_neighbours(chunk_top)=external_face
             ENDIF
+
+            !PETSc needs the global info on every process
+            lft   = (cx-1)*delta_x+1+add_x_prev
+            rght  = left(1)+delta_x-1+add_x
+            bttm  = (cy-1)*delta_y+1+add_y_prev
+            tp    = bottom(1)+delta_y-1+add_y
+            lx(cx)=rght-lft+1
+            ly(cy)=tp-bttm+1
 
             IF(cx.LE.mod_x)add_x_prev=add_x_prev+1
             chunk=chunk+1
