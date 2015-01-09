@@ -1,8 +1,8 @@
 #define EXTERNAL_FACE -1
 
-module PETScTeaLeaf
+MODULE PETScTeaLeaf
 
-  use definitions_module
+  USE definitions_module
 
   IMPLICIT NONE
 
@@ -26,96 +26,79 @@ module PETScTeaLeaf
   Vec :: RHSLoc
   DM  :: petscDA
 
-contains
+CONTAINS
 
-subroutine setup_petsc(eps,max_iters)
+SUBROUTINE setup_petsc(eps,max_iters)
 
 #include "finclude/petscsys.h"
 
   INTEGER :: c,cx,cy
-  INTEGER :: lx(1:px)
-  INTEGER :: ly(1:py)
   REAL(kind=8) :: eps
   INTEGER :: max_iters
 
-  call PetscInitialize(PETSC_NULL_CHARACTER,perr)
+  CALL PetscInitialize(PETSC_NULL_CHARACTER,perr)
 
   ! px, py set in clover_decompose to be chunks_x and chunks_y
   ! clover_decompose MUST be called first
 
-  DO cx=1,px
-    c = cx
-    lx(cx) = (chunks(c)%field%right - chunks(c)%field%left)+1
-    !write(6,*) 'lx(',cx,')=',lx(cx)
-  ENDDO
-
-  DO cy=1,py
-    c = ((cy-1)*px)+1
-    ly(cy) = (chunks(c)%field%top - chunks(c)%field%bottom)+1
-    !write(6,*) 'ly(',cy,')=',ly(cy)
-  ENDDO
-
- !write(6,*) 'Px=',px
-  !write(6,*) 'Py=',py
-  !write(6,*) 'grid%x_cells=',grid%x_cells
-  !write(6,*) 'grid%y_cells=',grid%y_cells
-
-
-  call DMDACreate2D(PETSC_COMM_WORLD, &
+  CALL DMDACreate2D(PETSC_COMM_WORLD,                      &
                     DMDA_BOUNDARY_NONE,DMDA_BOUNDARY_NONE, &
-                    DMDA_STENCIL_STAR, &
-				            grid%x_cells,grid%y_cells, &
-                    px,py, &
-				            1,1, &
-                    lx(1:px),ly(1:py), &
+                    DMDA_STENCIL_STAR,                     &
+                    grid%x_cells,grid%y_cells,             &
+                    px,py,                                 &
+                    1,1,                                   &
+                    lx(1:px),ly(1:py),                     &
                     petscDA,perr)
 
   ! Setup the KSP Solver
-  call KSPCreate(MPI_COMM_WORLD,kspObj,perr)
-  call KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
+  CALL KSPCreate(MPI_COMM_WORLD,kspObj,perr)
+  CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
 
-  call KSPSetFromOptions(kspObj,perr)
+  CALL KSPSetCheckNormIterations(kspObj,-1,perr)
+  CALL KSPSetFromOptions(kspObj,perr)
 
-  write(6,*)'PETSc Setup:'
-  write(6,*)'Absolute Tolerance set to', eps
-  write(6,*)'max_iters set to', max_iters
+  IF(parallel%boss) THEN
+    WRITE(g_out,*)
+    WRITE(g_out,*)'PETSc Setup:'
+    WRITE(g_out,*)'Absolute Tolerance set to', eps
+    WRITE(g_out,*)'max_iters set to', max_iters
+  ENDIF
 
-  call MPI_Comm_Size(MPI_COMM_WORLD,mpisize,perr)
+  CALL MPI_Comm_Size(MPI_COMM_WORLD,mpisize,perr)
 
-  if(mpisize .eq. 1) then
-    call DMCreateMatrix(petscDA,'seqaij',A,perr)
-  else
-    call DMCreateMatrix(petscDA,'mpiaij',A,perr)
-  endif
+  IF(mpisize .EQ. 1) THEN
+    CALL DMCreateMatrix(petscDA,'seqaij',A,perr)
+  ELSE
+    CALL DMCreateMatrix(petscDA,'mpiaij',A,perr)
+  ENDIF
 
   ! Setup the initial solution vector
-  call DMCreateGlobalVector(petscDA,X,perr)
+  CALL DMCreateGlobalVector(petscDA,X,perr)
 
   ! Duplicate Vector to setup B
-  call DMCreateGlobalVector(petscDA,B,perr)
+  CALL DMCreateGlobalVector(petscDA,B,perr)
 
   ! Local Vector for RHS Vector
-  call DMCreateLocalVector(petscDA,RHSLoc,perr)
+  CALL DMCreateLocalVector(petscDA,RHSLoc,perr)
 
   ! Local Vector for X Vector
-  call DMCreateLocalVector(petscDA,XLoc,perr)
+  CALL DMCreateLocalVector(petscDA,XLoc,perr)
 
   total_cg_iter = 0
   total_cheby_iter = 0
   total_petsc_iter = 0
 
-end subroutine setup_petsc
+END SUBROUTINE setup_petsc
 
-subroutine cleanup_petsc()
+SUBROUTINE cleanup_petsc()
 
 #include "finclude/petscsys.h"
 
-  call PetscFinalize(perr)
+  CALL PetscFinalize(perr)
 
-end subroutine cleanup_petsc
+END SUBROUTINE cleanup_petsc
 
-
-subroutine setupSol_petsc(c,rx,ry)
+SUBROUTINE setupSol_petsc(c,rx,ry)
 
     PetscErrorCode :: ierr
     INTEGER       :: c                                ! What chunk are we solving
@@ -145,54 +128,21 @@ subroutine setupSol_petsc(c,rx,ry)
 
     ! u0 = chunks(c)%field%u
 
-    call VecZeroEntries(X,perr)
+    CALL VecZeroEntries(X,perr)
 
-!    allocate(rowdata(0:((x_max-x_min)+1) * ((y_max-y_min)+1)))
-!    allocate(rowloc(0:((x_max-x_min)+1) * ((y_max-y_min)+1)))
+    CALL DMDAVecGetArrayF90(petscDA,X,xv,perr)
 
-!    ilen = ((x_max+1)-(x_min-1))+1
-
-!    if(parallel%task .eq. 1) write(6,*) 'x_min:', x_min
-!    if(parallel%task .eq. 1) write(6,*) 'x_max:', x_max
-
-!    if(parallel%task .eq. 1) write(6,*) 'y_min:', y_min
-!    if(parallel%task .eq. 1) write(6,*) 'y_max:', y_max
-
-!    do j = y_min, y_max
-!      do i = x_min, x_max
-!        rowdata(count) = chunks(c)%field%u(i,j)
-!        ! -1 from indexes for x_min and y_min for ghosts - local vector has ghost rows as well so
-!        ! row position has to have an extra offset from 0
-!        rowloc(count) = ((i-1)-(x_min-1)) +(((j-1)-(y_min-1))  * ilen)
-!        if(parallel%task .eq. 1) write(6,*)'rowloc:',rowloc(count)
-!        count = count + 1
-!      enddo
-!    enddo
-
-    !call VecSetValues(XLoc,count,rowloc,rowdata,INSERT_VALUES,perr);
-    !call DMLocalToGlobalBegin(petscDA,XLoc,INSERT_VALUES,X,perr)
-    !call DMLocalToGlobalEnd(petscDA,XLoc,INSERT_VALUES,X,perr)
-
-!    deallocate(rowloc)
-!    deallocate(rowdata)
-
-    call DMDAVecGetArrayF90(petscDA,X,xv,perr)
-
-    do j = bottom, top
-      do i = left, right
+    DO j = bottom, top
+      DO i = left, right
           xv(i-1,j-1) = chunks(c)%field%u((i-left)+1,(j-bottom)+1)
-      enddo
-    enddo
+      ENDDO
+    ENDDO
 
-    call DMDAVecRestoreArrayF90(petscDA,X,xv,perr)
+    CALL DMDAVecRestoreArrayF90(petscDA,X,xv,perr)
 
+END SUBROUTINE setupSol_petsc
 
-
-end subroutine setupSol_petsc
-
-
-
-subroutine setupRHS_petsc(c,rx,ry)
+SUBROUTINE setupRHS_petsc(c,rx,ry)
 
     PetscErrorCode :: ierr
     INTEGER       :: c                                ! What chunk are we solving
@@ -200,7 +150,7 @@ subroutine setupRHS_petsc(c,rx,ry)
     INTEGER       :: x_min,x_max,y_min,y_max
     INTEGER       :: g_xmin, g_xmax, g_ymin, g_ymax
     INTEGER :: i,j,ilen,count,i_local,j_local
-    REAL(kind=8),pointer,dimension(:) :: rowdata
+    REAL(KIND=8),pointer,dimension(:) :: rowdata
     INTEGER,pointer,dimension(:) :: rowloc
     REAL :: val
     REAL(KIND=8),INTENT(IN)   :: rx,ry
@@ -220,147 +170,56 @@ subroutine setupRHS_petsc(c,rx,ry)
     g_ymin = 1
     g_ymax = grid%y_cells
 
-    call VecZeroEntries(B,perr)
+    CALL VecZeroEntries(B,perr)
 
-!    allocate(rowdata(0:((x_max-x_min)+1) * ((y_max-y_min)+1)))
-!    allocate(rowloc(0:((x_max-x_min)+1) * ((y_max-y_min)+1)))
+    CALL DMDAVecGetArrayF90(petscDA,B,bv,perr)
 
-!    ilen = ((x_max+1)-(x_min-1))+1
-
-!    do j = bottom, top
-!      do i = left, right
-
-!        val = chunks(c)%field%u(i,j)
-
-!        i_local = i - left
-!        j_local = j - bottom
-
-!        IF(i == g_xmin) THEN
-!          val = val + rx * chunks(c)%field%u(i_local-1,j_local)
-!        ELSE IF(i == g_xmax) THEN
-!          val = val + rx * chunks(c)%field%u(i_local+1,j_local)
-!        ENDIF
-
-!        IF(j == g_ymin) THEN
-!          val = val + ry * chunks(c)%field%u(i_local,j_local-1)
-!        ELSE IF(j == g_ymax) THEN
-!          val = val + ry * chunks(c)%field%u(i_local,j_local+1)
-!        ENDIF
-
-!        rowdata(count) = val
-!        ! -1 from indexes for x_min and y_min for ghosts - local vector has ghost rows as well so
-!        ! row position has to have an extra offset from 0
-!        ! -1 from i and j to zero index them for the PETSc indexing system, which is zero indexed
-!        rowloc(count) = ((i-1)-(x_min-1)) +(((j-1)-(y_min-1))  * ilen   )     
-!        count = count + 1
-!      enddo
-!    enddo
-
-    !call VecSetValues(RHSLoc,count,rowloc,rowdata,INSERT_VALUES,perr);
-
-    !call DMLocalToGlobalBegin(petscDA,RHSLoc,INSERT_VALUES,B,perr)
-    !call DMLocalToGlobalEnd(petscDA,RHSLoc,INSERT_VALUES,B,perr)
-
-!    deallocate(rowloc)
-!    deallocate(rowdata)
-
-
-    call DMDAVecGetArrayF90(petscDA,B,bv,perr)
-
-    do j = bottom, top
-      do i = left, right
+    DO j = bottom, top
+      DO i = left, right
 
         i_local = (i - left)+1
         j_local = (j - bottom)+1
 
         val = chunks(c)%field%u(i_local,j_local)
 
-        ! This bit now commented out in hypre version - boundary stuff moved to matrix
-
-!        IF(i == g_xmin) THEN
-!          val = val + rx * chunks(c)%field%work_array6(i_local,j_local) * chunks(c)%field%u(i_local-1,j_local)
-!        ELSE IF(i == g_xmax) THEN
-!          val = val + rx * chunks(c)%field%work_array6(i_local+1,j_local) * chunks(c)%field%u(i_local+1,j_local)
-!        ENDIF
-
-!        IF(j == g_ymin) THEN
-!          val = val + ry *  chunks(c)%field%work_array7(i_local,j_local) * chunks(c)%field%u(i_local,j_local-1)
-!        ELSE IF(j == g_ymax) THEN
-!          val = val + ry * chunks(c)%field%work_array7(i_local,j_local+1) * chunks(c)%field%u(i_local,j_local+1)
-!        ENDIF
-
         bv(i-1,j-1) = val
 
-      enddo
-    enddo
+      ENDDO
+    ENDDO
 
-    call DMDAVecRestoreArrayF90(petscDA,B,bv,perr)
+    CALL DMDAVecRestoreArrayF90(petscDA,B,bv,perr)
 
+END SUBROUTINE setupRHS_petsc
 
-end subroutine setupRHS_petsc
+SUBROUTINE getSolution_petsc(c)
 
-
-subroutine getSolution_petsc(c)
-
-    integer :: i,j,ilen,rowloc
+    INTEGER :: i,j,ilen,rowloc
     PetscScalar :: sol_v(1)
     PetscOffset iss
-    integer :: count
+    INTEGER :: count
     INTEGER       :: x_min,x_max,y_min,y_max
     INTEGER       :: c                                ! What chunk are we solving
     PetscScalar,pointer :: xv(:,:)
     INTEGER       :: left,right,top,bottom
-
-!#   define sol_a(ib) sol_v(iss+(ib))
-
-!!    call DMGlobalToLocalBegin(petscDA,X,INSERT_VALUES,XLoc,perr)
-!!    call DMGlobalToLocalEnd(petscDA,X,INSERT_VALUES,XLoc,perr)
-
-!!    call VecGetArray(XLoc,sol_v,iss,perr)
-
-!    x_min = chunks(c)%field%x_min
-!    x_max = chunks(c)%field%x_max
-!    y_min = chunks(c)%field%y_min
-!    y_max = chunks(c)%field%y_max
-
-!!    ilen = ((x_max+1)-(x_min-1))+1
-
-!!    do j = y_min, y_max
-!!      do i = x_min, x_max
-
-!!        ! Local Vector still has ghosts, calculate i,j index
-!!        rowloc = ((i-1)-(x_min-1)) +(((j-1)-(y_min-1))  * ilen)
-!!        chunks(c)%field%u(i,j) = sol_a(rowloc+1)    ! +1 since indexed from 1
-
-!!      enddo
-!!    enddo
-
-!!    call VecRestoreArray(XLoc,sol_v,iss,perr)
-
-!!    call DMLocalToGlobalBegin(petscDA,XLoc,INSERT_VALUES,X,perr)
-!!    call DMLocalToGlobalEnd(petscDA,XLoc,INSERT_VALUES,X,perr)
 
     left = chunks(c)%field%left
     right = chunks(c)%field%right
     top = chunks(c)%field%top
     bottom = chunks(c)%field%bottom
 
-    call DMDAVecGetArrayF90(petscDA,X,xv,perr)
+    CALL DMDAVecGetArrayF90(petscDA,X,xv,perr)
 
-
-    do j = bottom, top
-      do i = left, right
+    DO j = bottom, top
+      DO i = left, right
         chunks(c)%field%u((i-left)+1,(j-bottom)+1) = xv(i-1,j-1)
-      enddo
-    enddo
+      ENDDO
+    ENDDO
 
-    call DMDAVecRestoreArrayF90(petscDA,X,xv,perr)
+    CALL DMDAVecRestoreArrayF90(petscDA,X,xv,perr)
 
+END SUBROUTINE getSolution_petsc
 
-end subroutine getSolution_petsc
-
-
-subroutine setupMatA_petsc(c,rx,ry)
+SUBROUTINE setupMatA_petsc(c,rx,ry)
 
   INTEGER       :: c                                ! What chunk are we solving
   INTEGER       :: left,right,top,bottom
@@ -391,10 +250,7 @@ subroutine setupMatA_petsc(c,rx,ry)
   g_ymax = grid%y_cells
 
   ! Zero Matrix
-  call MatZeroEntries(A,perr)
-
-  ! Kx = work_array6
-  ! Ky = work_array7
+  CALL MatZeroEntries(A,perr)
 
   DO j_g = bottom,top
     DO i_g = left,right
@@ -409,28 +265,28 @@ subroutine setupMatA_petsc(c,rx,ry)
         row(MatStencil_i,1) = i_g - 1
         row(MatStencil_j,1) = j_g - 1
 
-        c1 = (1.0+(2.0*rx)+(2.0*ry))
-        c2 = (-1*rx) * chunks(c)%field%work_array6(i,j)
-        c3 = (-1*rx) * chunks(c)%field%work_array6(i+1,j)
-        c4 = (-1*ry) * chunks(c)%field%work_array7(i,j)
-        c5 = (-1*ry) * chunks(c)%field%work_array7(i,j+1)
+        c2 = (-1*rx) * chunks(c)%field%Vector_Kx(i,j)
+        c3 = (-1*rx) * chunks(c)%field%Vector_Kx(i+1,j)
+        c4 = (-1*ry) * chunks(c)%field%Vector_Ky(i,j)
+        c5 = (-1*ry) * chunks(c)%field%Vector_Ky(i,j+1)
 
         IF(i_g == 1) THEN ! Global X Low Boundary
-          c3 = (-2*rx) * chunks(c)%field%work_array6(i+1,j)
+          c2=0
         ENDIF
 
         IF(i_g == grid%x_cells) THEN
-          c2 = (-2*rx) * chunks(c)%field%work_array6(i,j)
+          c3=0
+        ENDIF
+
+        IF(j_g == 1) THEN
+          c4=0
         ENDIF
         
-        IF(j_g == 1) THEN
-          c5 = (-2*ry) * chunks(c)%field%work_array7(i,j+1)
-        ENDIF
-
         IF(j_g == grid%y_cells) THEN
-          c4 = (-2*ry) * chunks(c)%field%work_array7(i,j)
+          c5=0
         ENDIF
 
+        c1 = (1.0_8-c2-c3-c4-c5)
 
         IF(.NOT.(j_g == 1)) THEN     ! Not Bottom External Boundary
           stencil(count) = c4
@@ -459,7 +315,6 @@ subroutine setupMatA_petsc(c,rx,ry)
           count = count + 1
         ENDIF
 
-
         IF(.NOT.(j_g == grid%y_cells)) THEN     ! Not Top External Boundary
           stencil(count) = c5
           column(MatStencil_i,count) = i_g - 1
@@ -472,64 +327,66 @@ subroutine setupMatA_petsc(c,rx,ry)
     ENDDO
   ENDDO
 
-  call MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY,perr)
-  call MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY,perr)
+  CALL MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY,perr)
+  CALL MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY,perr)
 
-end subroutine setupMatA_petsc
+END SUBROUTINE setupMatA_petsc
 
+SUBROUTINE solve_petsc(numit,error)
 
-subroutine solve_petsc(numit)
-
-    use MPI
+    USE MPI
 
     INTEGER,INTENT(INOUT) :: numit
+    REAL(KIND=8),INTENT(INOUT) :: error
     INTEGER :: errcode, mpierr
     KSPConvergedReason :: reason
+    PetscReal :: residual  ! Final residual
 
-    call KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
-    call KSPSolve(kspObj,B,X,perr)
-    call KSPGetIterationNumber(kspObj, numit, perr)
+    CALL KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
+    CALL KSPSolve(kspObj,B,X,perr)
+    CALL KSPGetIterationNumber(kspObj, numit, perr)
 
-    call KSPGetConvergedReason(kspObj,reason,perr)
-    if(reason < 0) then
-      write(6,*) ' Error: Did not Converge. Calling MPI_Abort'
-	  write(6,*) ' Divergence Reason:'
+    CALL KSPGetConvergedReason(kspObj,reason,perr)
+    CALL KSPGetResidualNorm(kspObj,residual,perr)
+    error=residual
 
-	    if(reason == -2) then
-		    write(6,*) ' Diverged Null'
-	      else if(reason == -3) then
-		    write(6,*) ' Diverged ITS, took ', numit, ' iterations'
-	      else if(reason == -4) then
-		    write(6,*) ' Diverged DTOL'
-	      else if(reason == -5) then
-		    write(6,*) ' Diverged Breakdown'
-	      else if(reason == -6) then
-		    write(6,*) ' Diverged Breakdown BICG'
-	      else if(reason == -7) then
-		    write(6,*) ' Diverged NonSymmetric'
-	      else if(reason == -8) then
-		    write(6,*) ' Diverged Indefinite PC'
-	      else if(reason == -9) then
-		    write(6,*) ' Diverged nanorinf'
-	      else if(reason == -10) then
-		    write(6,*) ' Diverged indefinite mat'
-	    endif
+    IF(reason < 0) THEN
+      WRITE(g_out,*) ' Error: Did not Converge. Calling MPI_Abort'
+      WRITE(g_out,*) ' Divergence Reason:'
 
-      call MPI_Abort(MPI_COMM_WORLD,errcode,mpierr)
-    endif 
+      IF(reason == -2) THEN
+        WRITE(g_out,*) ' Diverged Null'
+      ELSE IF(reason == -3) THEN
+        WRITE(g_out,*) ' Diverged ITS, took ', numit, ' iterations'
+      ELSE IF(reason == -4) THEN
+        WRITE(g_out,*) ' Diverged DTOL'
+      ELSE IF(reason == -5) THEN
+        WRITE(g_out,*) ' Diverged Breakdown'
+      ELSE IF(reason == -6) THEN
+        WRITE(g_out,*) ' Diverged Breakdown BICG'
+      ELSE IF(reason == -7) THEN
+        WRITE(g_out,*) ' Diverged NonSymmetric'
+      ELSE IF(reason == -8) THEN
+        WRITE(g_out,*) ' Diverged Indefinite PC'
+      ELSE IF(reason == -9) THEN
+        WRITE(g_out,*) ' Diverged nanorinf'
+      ELSE IF(reason == -10) THEN
+        WRITE(g_out,*) ' Diverged indefinite mat'
+      ENDIF
+
+      CALL MPI_Abort(MPI_COMM_WORLD,errcode,mpierr)
+    ENDIF 
 
     total_petsc_iter = total_petsc_iter + numit
 
-end subroutine solve_petsc
-
-
+END SUBROUTINE solve_petsc
 
 ! Apply Paul Garrett Approach
 ! (1) Use CG to Execute 10 iteration, retrieve eigenvalues
 ! (2) Set Solver to Chebyshev type, set eigenvalues from CG execution
 ! (3) Set Residual for Chebyshev to reduce iteration count
 ! (4) Execute Chebyshev Solve
-subroutine solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby)
+SUBROUTINE solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)
 
 !    use MPI
 
@@ -540,6 +397,7 @@ subroutine solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby)
     KSPConvergedReason :: reason
     PC :: tPC
     REAL(kind=8) :: eps
+    REAL(KIND=8),INTENT(INOUT) :: error
     INTEGER :: max_iters
     PetscReal :: r(0:pgcg_cg_iter-1)    ! Real Component of EigenValue Array
     PetscReal :: c(0:pgcg_cg_iter-1)    ! Complex Component of EigenValue Array
@@ -547,115 +405,137 @@ subroutine solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby)
     PetscReal :: emax      ! Max EigenValue
     PetscReal :: emin      ! Min EigenValue
 
-    write(6,*) 'pgcg_cg_iter set to ', pgcg_cg_iter
+    IF(parallel%boss) WRITE(g_out,*) 'pgcg_cg_iter set to ', pgcg_cg_iter
 
-    call KSPSetComputeEigenValues(kspObj,PETSC_TRUE,perr) ! Must be called before KSPSetup Routines to enable eigenvalue calculation
+    CALL KSPSetComputeEigenValues(kspObj,PETSC_TRUE,perr) ! Must be called before KSPSetup Routines to enable eigenvalue calculation
 
-    call KSPSetType(kspObj,KSPCG,perr)
-    call KSPGetPC(kspObj,tPC,perr)
-    call PCSetType(tPC,PCBJACOBI,perr)
+    CALL KSPSetType(kspObj,KSPCG,perr)
+    CALL KSPGetPC(kspObj,tPC,perr)
+    CALL PCSetType(tPC,PCBJACOBI,perr)
 
-    call KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
-    call KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,pgcg_cg_iter,perr)
-    call KSPSetInitialGuessNonzero(kspObj,PETSC_FALSE,perr)
+    CALL KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
+    CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,pgcg_cg_iter,perr)
+    CALL KSPSetInitialGuessNonzero(kspObj,PETSC_FALSE,perr)
 
-    call KSPSolve(kspObj,B,X,perr)
+    CALL KSPSolve(kspObj,B,X,perr)
 
     ! Don't check convergence reasons or iteration count here - unlikely to have converged yet
 
     ! Calculate the EigenValues from CG Solve after 10 iterations. Array should be returned sorted.
-    call KSPComputeEigenValues(kspObj,pgcg_cg_iter,r,c,neig,perr)
+    CALL KSPComputeEigenValues(kspObj,pgcg_cg_iter,r,c,neig,perr)
     emax = r(neig-1)
     emin = r(0)
 
-    if(parallel%task .eq. 0) write(6,*) ' Emax:', emax, ', Emin:', emin
+    IF(parallel%boss) WRITE(g_out,*) ' Emax:', emax, ', Emin:', emin
 
-    call KSPGetIterationNumber(kspObj, numit_cg, perr)
+    CALL KSPGetIterationNumber(kspObj, numit_cg, perr)
     total_cg_iter = total_cg_iter + numit_cg
 
-    call KSPGetConvergedReason(kspObj,reason,perr)
+    CALL KSPGetConvergedReason(kspObj,reason,perr)
+    CALL KSPGetResidualNorm(kspObj,residual,perr)
+    error=residual
 
-    if(reason < 0) then   ! Did not converge in CG, Progress onto Cheby
+    IF(reason < 0) THEN   ! Did not converge in CG, Progress onto Cheby
 
       ! Main Solve is in Next section within Chebyshev
 
-      call KSPSetComputeEigenValues(kspObj,PETSC_FALSE,perr) ! Disable EigenValue Calculation
+      CALL KSPSetComputeEigenValues(kspObj,PETSC_FALSE,perr) ! Disable EigenValue Calculation
 
-      call KSPSetType(kspObj,KSPCHEBYSHEV,perr)
-      call KSPGetPC(kspObj,tPC,perr)
-      call PCSetType(tPC,PCBJACOBI,perr)
+      CALL KSPSetType(kspObj,KSPCHEBYSHEV,perr)
+      CALL KSPGetPC(kspObj,tPC,perr)
+      CALL PCSetType(tPC,PCBJACOBI,perr)
 
-      call KSPSetInitialGuessNonzero(kspObj,PETSC_TRUE,perr)    ! Disable zeroing of results vector (reuse for residual)
-      call KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
-      call KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
-      call KSPChebyshevSetEigenValues(kspObj,emax,emin,perr)
+      CALL KSPSetInitialGuessNonzero(kspObj,PETSC_TRUE,perr)    ! Disable zeroing of results vector (reuse for residual)
+      CALL KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
+      CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
+      CALL KSPChebyshevSetEigenValues(kspObj,emax,emin,perr)
 
-      call KSPSolve(kspObj,B,X,perr)
+      CALL KSPSolve(kspObj,B,X,perr)
 
-      call KSPGetIterationNumber(kspObj, numit_cheby, perr)
+      CALL KSPGetIterationNumber(kspObj, numit_cheby, perr)
 
-      call KSPGetConvergedReason(kspObj,reason,perr)
-      if(reason < 0) then
-        write(6,*) ' Error: Did not Converge. Calling MPI_Abort'
-	      write(6,*) ' Divergence Reason:'
+      CALL KSPGetConvergedReason(kspObj,reason,perr)
+      IF(reason < 0) THEN
+        WRITE(g_out,*) ' Error: Did not Converge. Calling MPI_Abort'
+        WRITE(g_out,*) ' Divergence Reason:'
 
-	      if(reason == -2) then
-		      write(6,*) ' Diverged Null'
-	        else if(reason == -3) then
-		      write(6,*) ' Cheby - Diverged ITS, took ', numit_cheby, ' iterations'
-	        else if(reason == -4) then
-		      write(6,*) ' Diverged DTOL'
-	        else if(reason == -5) then
-		      write(6,*) ' Diverged Breakdown'
-	        else if(reason == -6) then
-		      write(6,*) ' Diverged Breakdown BICG'
-	        else if(reason == -7) then
-		      write(6,*) ' Diverged NonSymmetric'
-	        else if(reason == -8) then
-		      write(6,*) ' Diverged Indefinite PC'
-	        else if(reason == -9) then
-		      write(6,*) ' Diverged nanorinf'
-	        else if(reason == -10) then
-		      write(6,*) ' Diverged indefinite mat'
-	      endif
+        IF(reason == -2) THEN
+          WRITE(g_out,*) ' Diverged Null'
+        ELSE IF(reason == -3) THEN
+          WRITE(g_out,*) ' Cheby - Diverged ITS, took ', numit_cheby, ' iterations'
+        ELSE IF(reason == -4) THEN
+          WRITE(g_out,*) ' Diverged DTOL'
+        ELSE IF(reason == -5) THEN
+          WRITE(g_out,*) ' Diverged Breakdown'
+        ELSE IF(reason == -6) THEN
+          WRITE(g_out,*) ' Diverged Breakdown BICG'
+        ELSE IF(reason == -7) THEN
+          WRITE(g_out,*) ' Diverged NonSymmetric'
+        ELSE IF(reason == -8) THEN
+          WRITE(g_out,*) ' Diverged Indefinite PC'
+        ELSE IF(reason == -9) THEN
+          WRITE(g_out,*) ' Diverged nanorinf'
+        ELSE IF(reason == -10) THEN
+          WRITE(g_out,*) ' Diverged indefinite mat'
+        ENDIF
 
-        call MPI_Abort(MPI_COMM_WORLD,errcode,mpierr)
-      endif 
+        CALL MPI_Abort(MPI_COMM_WORLD,errcode,mpierr)
+      ENDIF 
 
       total_cheby_iter = total_cheby_iter + numit_cheby
 
-    endif
+    ENDIF
 
-end subroutine solve_petsc_pgcg
+END SUBROUTINE solve_petsc_pgcg
 
+SUBROUTINE printXVec(fileName)
 
-subroutine printXVec(fileName)
-    use MPI
+    USE MPI
 
-    implicit none
+    IMPLICIT NONE
 
 #   include "finclude/petscviewer.h"
 
-    character(len=*) :: fileName
-    character(len=8) :: id
+    CHARACTER(LEN=*) :: fileName
+    CHARACTER(LEN=8) :: id
     PetscViewer :: viewer
 
     ! Write Global Solution Vector
-    call PetscViewerCreate(MPI_COMM_WORLD,viewer,perr)
-    call PetscViewerSetType(viewer,"ascii",perr)
-    call PetscViewerSetFormat(viewer,PETSC_VIEWER_ASCII_INDEX,perr)
-    call PetscViewerFileSetName(viewer,fileName,perr)
-    call VecView(X,viewer,perr)
-    call PetscViewerDestroy(viewer,perr)
+    CALL PetscViewerCreate(MPI_COMM_WORLD,viewer,perr)
+    CALL PetscViewerSetType(viewer,"ascii",perr)
+    CALL PetscViewerSetFormat(viewer,PETSC_VIEWER_ASCII_INDEX,perr)
+    CALL PetscViewerFileSetName(viewer,fileName,perr)
+    CALL VecView(X,viewer,perr)
+    CALL PetscViewerDestroy(viewer,perr)
 
-end subroutine printXVec
+END SUBROUTINE printXVec
 
+SUBROUTINE printBVec(fileName)
 
+    USE MPI
 
-subroutine printBVec(fileName)
-    use MPI
+    IMPLICIT NONE
 
-    implicit none
+#   include "finclude/petscviewer.h"
+
+    CHARACTER(LEN=*) :: fileName
+    CHARACTER(LEN=8) :: id
+    PetscViewer :: viewer
+
+    CALL PetscViewerCreate(MPI_COMM_WORLD,viewer,perr)
+    CALL PetscViewerSetType(viewer,"ascii",perr)
+    CALL PetscViewerSetFormat(viewer,PETSC_VIEWER_ASCII_INDEX,perr)
+    CALL PetscViewerFileSetName(viewer,fileName,perr)
+    CALL VecView(B,viewer,perr)
+    CALL PetscViewerDestroy(viewer,perr)
+
+END SUBROUTINE printBVec
+
+SUBROUTINE printMatA(fileName)
+
+    USE MPI
+
+    IMPLICIT NONE
 
 #   include "finclude/petscviewer.h"
 
@@ -663,34 +543,13 @@ subroutine printBVec(fileName)
     character(len=8) :: id
     PetscViewer :: viewer
 
-    call PetscViewerCreate(MPI_COMM_WORLD,viewer,perr)
-    call PetscViewerSetType(viewer,"ascii",perr)
-    call PetscViewerSetFormat(viewer,PETSC_VIEWER_ASCII_INDEX,perr)
-    call PetscViewerFileSetName(viewer,fileName,perr)
-    call VecView(B,viewer,perr)
-    call PetscViewerDestroy(viewer,perr)
+    CALL PetscViewerCreate(MPI_COMM_WORLD,viewer,perr)
+    CALL PetscViewerSetType(viewer,"ascii",perr)
+    CALL PetscViewerSetFormat(viewer,PETSC_VIEWER_DEFAULT,perr)
+    CALL PetscViewerFileSetName(viewer,fileName,perr)
+    CALL MatView(A,viewer,perr)
+    CALL PetscViewerDestroy(viewer,perr)
 
-end subroutine printBVec
+END SUBROUTINE printMatA
 
-subroutine printMatA(fileName)
-
-    use MPI
-
-    implicit none
-
-#   include "finclude/petscviewer.h"
-
-    character(len=*) :: fileName
-    character(len=8) :: id
-    PetscViewer :: viewer
-
-    call PetscViewerCreate(MPI_COMM_WORLD,viewer,perr)
-    call PetscViewerSetType(viewer,"ascii",perr)
-    call PetscViewerSetFormat(viewer,PETSC_VIEWER_DEFAULT,perr)
-    call PetscViewerFileSetName(viewer,fileName,perr)
-    call MatView(A,viewer,perr)
-    call PetscViewerDestroy(viewer,perr)
-
-end subroutine printMatA
-
-end module PETScTeaLeaf
+END MODULE PETScTeaLeaf
