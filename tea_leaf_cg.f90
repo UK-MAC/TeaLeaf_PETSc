@@ -121,7 +121,7 @@ SUBROUTINE tea_leaf_kernel_init_cg_fortran(x_min,  &
 
             r(j, k) = u(j, k) - w(j, k)
             !r(j, k) = u(j, k)! This is required to make a zero initial guess to match petsc errant behaviour
-                              ! Only works one timestep is run
+                              ! Only works if one timestep is run
         ENDDO
     ENDDO
 !$OMP END DO

@@ -38,7 +38,7 @@ SUBROUTINE setup_petsc(eps,max_iters)
 
   CALL PetscInitialize(PETSC_NULL_CHARACTER,perr)
 
-  ! px, py set in clover_decompose to be chunks_x and chunks_y
+  ! px, py set in tea_decompose to be chunks_x and chunks_y
   ! clover_decompose MUST be called first
 
   CALL DMDACreate2D(PETSC_COMM_WORLD,                      &
@@ -54,7 +54,7 @@ SUBROUTINE setup_petsc(eps,max_iters)
   CALL KSPCreate(MPI_COMM_WORLD,kspObj,perr)
   CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
 
-  CALL KSPSetCheckNormIterations(kspObj,-1,perr)
+  CALL KSPSetCheckNormIteration(kspObj,-1,perr)
   CALL KSPSetFromOptions(kspObj,perr)
 
   IF(parallel%boss) THEN
@@ -106,9 +106,9 @@ SUBROUTINE setupSol_petsc(c,rx,ry)
     INTEGER       :: g_xmin, g_xmax, g_ymin, g_ymax
     INTEGER       :: left,right,top,bottom
     INTEGER :: i,j,ilen,count
-    REAL(kind=8),pointer,dimension(:) :: rowdata
+    REAL(KIND=8),pointer,dimension(:) :: rowdata
     INTEGER,pointer,dimension(:) :: rowloc
-    REAL :: val
+    REAL(KIND=8) :: val
     REAL(KIND=8),INTENT(IN)   :: rx,ry
     PetscScalar,pointer :: xv(:,:)
 
@@ -152,7 +152,7 @@ SUBROUTINE setupRHS_petsc(c,rx,ry)
     INTEGER :: i,j,ilen,count,i_local,j_local
     REAL(KIND=8),pointer,dimension(:) :: rowdata
     INTEGER,pointer,dimension(:) :: rowloc
-    REAL :: val
+    REAL(KIND=8) :: val
     REAL(KIND=8),INTENT(IN)   :: rx,ry
     PetscScalar,pointer :: bv(:,:)
 
@@ -322,7 +322,7 @@ SUBROUTINE setupMatA_petsc(c,rx,ry)
           count = count + 1
         ENDIF
 
-        call MatSetValuesStencil(A,1,row,count-1,column,stencil,INSERT_VALUES,perr)
+        CALL MatSetValuesStencil(A,1,row,count-1,column,stencil,INSERT_VALUES,perr)
 
     ENDDO
   ENDDO
@@ -335,6 +335,7 @@ END SUBROUTINE setupMatA_petsc
 SUBROUTINE solve_petsc(numit,error)
 
     USE MPI
+    USE data_module
 
     INTEGER,INTENT(INOUT) :: numit
     REAL(KIND=8),INTENT(INOUT) :: error
@@ -388,7 +389,8 @@ END SUBROUTINE solve_petsc
 ! (4) Execute Chebyshev Solve
 SUBROUTINE solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)
 
-!    use MPI
+!    USE MPI
+    USE data_module
 
 #include "finclude/petscsys.h"
 
@@ -396,8 +398,7 @@ SUBROUTINE solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)
     INTEGER :: errcode, mpierr
     KSPConvergedReason :: reason
     PC :: tPC
-    REAL(kind=8) :: eps
-    REAL(KIND=8),INTENT(INOUT) :: error
+    REAL(kind=8) :: eps,error
     INTEGER :: max_iters
     PetscReal :: r(0:pgcg_cg_iter-1)    ! Real Component of EigenValue Array
     PetscReal :: c(0:pgcg_cg_iter-1)    ! Complex Component of EigenValue Array
@@ -455,6 +456,8 @@ SUBROUTINE solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)
       CALL KSPGetIterationNumber(kspObj, numit_cheby, perr)
 
       CALL KSPGetConvergedReason(kspObj,reason,perr)
+      CALL KSPGetResidualNorm(kspObj,residual,perr)
+      error=residual
       IF(reason < 0) THEN
         WRITE(g_out,*) ' Error: Did not Converge. Calling MPI_Abort'
         WRITE(g_out,*) ' Divergence Reason:'
@@ -539,8 +542,8 @@ SUBROUTINE printMatA(fileName)
 
 #   include "finclude/petscviewer.h"
 
-    character(len=*) :: fileName
-    character(len=8) :: id
+    CHARACTER(LEN=*) :: fileName
+    CHARACTER(LEN=8) :: id
     PetscViewer :: viewer
 
     CALL PetscViewerCreate(MPI_COMM_WORLD,viewer,perr)

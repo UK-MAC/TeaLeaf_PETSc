@@ -91,6 +91,12 @@ SUBROUTINE start
 
   CALL tea_barrier
 
+  ! Substitute for PETSc Setup Call
+  IF(use_PETSC_kernels) THEN
+    IF(parallel%boss) WRITE(g_out,*) ' Using PETSc'
+    CALL setup_petsc(eps,max_iters)
+  ENDIF
+
   DO c=1,chunks_per_task
     IF(chunks(c)%task.EQ.parallel%task)THEN
       CALL tea_allocate_buffers(c)
@@ -140,11 +146,5 @@ SUBROUTINE start
   CALL tea_barrier
 
   profiler_on=profiler_off
-
-  ! Substitute for PETSc Setup Call
-  IF(use_PETSC_kernels) THEN
-    IF(parallel%boss) WRITE(g_out,*) ' Using PETSc'
-    CALL setup_petsc(eps,max_iters)
-  ENDIF
 
 END SUBROUTINE start

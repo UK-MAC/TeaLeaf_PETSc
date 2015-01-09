@@ -60,13 +60,13 @@ SUBROUTINE tea_finalize
 
   INTEGER :: err
 
+  IF(use_PETSC_kernels) THEN
+    CALL cleanup_petsc()
+  ENDIF
   CLOSE(g_out)
   CALL FLUSH(0)
   CALL FLUSH(6)
   CALL FLUSH(g_out)
-  IF(use_PETSC_kernels) THEN
-    CALL cleanup_petsc()
-  ENDIF
   CALL MPI_FINALIZE(err)
 
 END SUBROUTINE tea_finalize
@@ -198,9 +198,9 @@ SUBROUTINE tea_decompose(x_cells,y_cells,left,right,bottom,top)
 
             !PETSc needs the global info on every process
             lft   = (cx-1)*delta_x+1+add_x_prev
-            rght  = left(1)+delta_x-1+add_x
+            rght  = lft+delta_x-1+add_x
             bttm  = (cy-1)*delta_y+1+add_y_prev
-            tp    = bottom(1)+delta_y-1+add_y
+            tp    = bttm+delta_y-1+add_y
             lx(cx)=rght-lft+1
             ly(cy)=tp-bttm+1
 
@@ -210,6 +210,9 @@ SUBROUTINE tea_decompose(x_cells,y_cells,left,right,bottom,top)
         add_x_prev=0
         IF(cy.LE.mod_y)add_y_prev=add_y_prev+1
     ENDDO
+
+    px = chunk_x
+    py = chunk_y
 
   IF(parallel%boss)THEN
     WRITE(g_out,*)

@@ -8,7 +8,6 @@ CONTAINS
 
 SUBROUTINE setup_petsc(eps,max_iters)
 
-#include "finclude/petscsys.h"
 
   REAL(kind=8) :: eps
   INTEGER :: max_iters
@@ -48,35 +47,22 @@ END SUBROUTINE setupMatA_petsc
 
 SUBROUTINE solve_petsc(numit,error)
 
-    USE MPI
-
     INTEGER,INTENT(INOUT) :: numit
     REAL(KIND=8),INTENT(INOUT) :: error
 
 END SUBROUTINE solve_petsc
 
-! Apply Paul Garrett Approach
-! (1) Use CG to Execute 10 iteration, retrieve eigenvalues
-! (2) Set Solver to Chebyshev type, set eigenvalues from CG execution
-! (3) Set Residual for Chebyshev to reduce iteration count
-! (4) Execute Chebyshev Solve
 SUBROUTINE solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)
 
-!    use MPI
-
-#include "finclude/petscsys.h"
 
     INTEGER,INTENT(INOUT) :: numit_cg, numit_cheby
     INTEGER :: errcode, mpierr
-    REAL(kind=8) :: eps
-    REAL(KIND=8),INTENT(INOUT) :: error
+    REAL(kind=8) :: eps,error
     INTEGER :: max_iters
 
 END SUBROUTINE solve_petsc_pgcg
 
 SUBROUTINE printXVec(fileName)
-
-    USE MPI
 
     IMPLICIT NONE
 
@@ -86,8 +72,6 @@ END SUBROUTINE printXVec
 
 SUBROUTINE printBVec(fileName)
 
-    USE MPI
-
     IMPLICIT NONE
 
     CHARACTER(LEN=*) :: fileName
@@ -96,12 +80,10 @@ END SUBROUTINE printBVec
 
 SUBROUTINE printMatA(fileName)
 
-    USE MPI
-
     IMPLICIT NONE
 
 
-    character(len=*) :: fileName
+    CHARACTER(LEN=*) :: fileName
 
 END SUBROUTINE printMatA
 

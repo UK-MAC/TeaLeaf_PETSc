@@ -100,7 +100,7 @@ CFLAGS_XL       = -O5 -qipa=partition=large -g -qfullpath -Q -qlistopt -qattr=fu
 CFLAGS_          = -O3
 
 ifdef DEBUG
-  FLAGS_INTEL     = -O0 -g -debug all -check all -traceback -check noarg_temp_created
+  FLAGS_INTEL     = -O0 -g -debug all -check all -traceback -check noarg_temp_created -fpp
   FLAGS_SUN       = -g -xopenmp=noopt -stackvar -u -fpover=yes -C -ftrap=common
   FLAGS_GNU       = -O0 -g -O -Wall -Wextra -fbounds-check
   FLAGS_CRAY      = -O0 -g -em -eD
@@ -109,7 +109,7 @@ ifdef DEBUG
   FLAGS_XL       = -O0 -g -qfullpath -qcheck -qflttrap=ov:zero:invalid:en -qsource -qinitauto=FF -qmaxmem=-1 -qinit=f90ptr -qsigtrap -qextname=flush:timer_c:unpack_top_bottom_buffers_c:pack_top_bottom_buffers_c:unpack_left_right_buffers_c:pack_left_right_buffers_c:field_summary_kernel_c:update_halo_kernel_c:generate_chunk_kernel_c:initialise_chunk_kernel_c:calc_dt_kernel_c
   FLAGS_          = -O0 -g
   CFLAGS_INTEL    = -O0 -g -debug all -traceback
-  CFLAGS_SUN      = -g -O0 -xopenmp=noopt -stackvar -u -fpover=yes -C -ftrap=common
+  CFLAGS_SUN      = -g -O0 -xopenmp=noopt -stackvar -u -fpover=yes -C -ftrap=common -fpp
   CFLAGS_GNU       = -O0 -g -O -Wall -Wextra -fbounds-check
   CFLAGS_CRAY     = -O0 -g -em -eD
   CFLAGS_PGI      = -O0 -g -C -Mchkstk -Ktrap=fp -Mchkfpstk
@@ -130,13 +130,13 @@ endif
 
 COM_PATH_P=
 PETSC_SOURCE=PetscLeaf.F90
-PETSC_DIR=$(COM_PATH_P)/petsc/3.4.3
+PETSC_DIR=${COM_PATH_P}/petsc/3.4.3
 LAPACK_DIR=
-ML_LIB= -L$(COM_PATH_P)/ml/6.2/lib -lml
-SPOOLES_LIB= -L$(PETSC_DIR)/spooles/2.2/lib -lspooles
-HYPRE_LIB=-L$(COM_PATH_P)/hypre/2.8.0b/lib -lHYPRE
-PETSC_LIB=-L$(PETSC_DIR)/lib -lpetsc \
-	  $(HYPRE_LIB) $(ML_LIB) $(SPOOLES_LIB)
+ML_LIB= -L${COM_PATH_P}/ml/6.2/lib -lml
+SPOOLES_LIB= -L${PETSC_DIR}/spooles/2.2/lib -lspooles
+HYPRE_LIB=-L${COM_PATH_P}/hypre/2.8.0b/lib -lHYPRE
+PETSC_LIB=-L${PETSC_DIR}/lib -lpetsc \
+	  ${HYPRE_LIB} ${ML_LIB} ${SPOOLES_LIB}
 BLASLAPACK_LIB=0
 REQ_LIB=
 
@@ -153,8 +153,8 @@ ifdef(NO_PETSC)
   REQ_LIB=
 endif
 
-FLAGS=$(FLAGS_$(COMPILER)) $(OMP) $(I3E) $(OPTIONS) -I${PETSC_DIR}/include -lm -lmpi_cxx -lstdc++ 
-CFLAGS=$(CFLAGS_$(COMPILER)) $(OMP) $(I3E) $(C_OPTIONS) -I${PETSC_DIR}/include -c
+FLAGS=${FLAGS_$(COMPILER)} ${OMP} ${I3E} ${OPTIONS} -I${PETSC_DIR}/include -lm -lmpi_cxx -lstdc++ 
+CFLAGS=${CFLAGS_$(COMPILER)} ${OMP} ${I3E} ${C_OPTIONS} -I${PETSC_DIR}/include -c
 MPI_COMPILER=mpif90
 C_MPI_COMPILER=mpicc
 
@@ -162,7 +162,7 @@ tea_leaf: c_lover *.f90 Makefile
 	$(MPI_COMPILER) $(FLAGS)	\
 	data.f90			\
 	definitions.f90			\
-	PetscLeaf.f90		        \
+	${PETSC_SOURCE}		        \
 	pack_kernel.f90			\
 	tea.f90				\
 	report.f90			\
@@ -194,9 +194,9 @@ tea_leaf: c_lover *.f90 Makefile
 	tea_leaf.f90			\
 	diffuse.f90                     \
 	timer_c.o                       \
-	$(PETSC_DIR)/lib/libpetsc.a     \
-	$(LAPACK_DIR)/lib/liblapack.a \
-	$(LAPACK_DIR)/lib/libblas.a \
+	$(PETSC_LIB)   			\
+	$(BLASLAPACK_LIB)		\
+	$(REQ_LIB)			\
 	-o tea_leaf; echo $(MESSAGE)
 
 c_lover: *.c Makefile

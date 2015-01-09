@@ -71,7 +71,7 @@ MODULE definitions_module
    LOGICAL      :: tl_use_jacobi
    LOGICAL      :: verbose_on
    LOGICAL      :: use_PETSC_kernels
-   LOGICAL      :: use_ppcg
+   LOGICAL      :: use_pgcg
    INTEGER      :: max_iters
    INTEGER      :: pgcg_cg_iter
    REAL(KIND=8) :: eps
