@@ -30,6 +30,8 @@ CONTAINS
 
 SUBROUTINE setup_petsc(eps,max_iters)
 
+  USE data_module
+
 #include "finclude/petscsys.h"
 
   INTEGER :: c,cx,cy
@@ -398,13 +400,14 @@ SUBROUTINE solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)
     INTEGER :: errcode, mpierr
     KSPConvergedReason :: reason
     PC :: tPC
-    REAL(kind=8) :: eps,error
+    REAL(KIND=8) :: eps,error
     INTEGER :: max_iters
     PetscReal :: r(0:pgcg_cg_iter-1)    ! Real Component of EigenValue Array
     PetscReal :: c(0:pgcg_cg_iter-1)    ! Complex Component of EigenValue Array
     PetscInt  :: neig      ! Number of Eigenvalues computed
     PetscReal :: emax      ! Max EigenValue
     PetscReal :: emin      ! Min EigenValue
+    PetscReal :: residual  ! Final residual
 
     IF(parallel%boss) WRITE(g_out,*) 'pgcg_cg_iter set to ', pgcg_cg_iter
 

@@ -70,7 +70,7 @@ SUBROUTINE tea_leaf()
   halo_time = 0.0_8
   solve_time = 0.0_8
   dot_product_time = 0.0_8
-  initial_residual=1.0_8 ! I still need to extract the initial residual from PETSc rusn to get a matching relative error
+  initial_residual=1.0_8 ! I still need to extract the initial residual from PETSc runs to get a matching relative error
 
   IF(coefficient .NE. RECIP_CONDUCTIVITY .AND. coefficient .NE. conductivity) THEN
     CALL report_error('tea_leaf', 'unknown coefficient option')
@@ -104,7 +104,7 @@ SUBROUTINE tea_leaf()
       ENDIF
 
       IF(tl_use_cg .OR. tl_use_chebyshev .OR. tl_use_ppcg .OR. use_PETSC_kernels) THEN
-        ! All 3 of these solvers use the CG kernels
+        ! All 3 of these solvers use the CG kernels and this is also called for PETSc to get the initial residual
         IF(use_fortran_kernels) THEN
           CALL tea_leaf_kernel_init_cg_fortran(chunks(c)%field%x_min, &
               chunks(c)%field%x_max,                                  &
@@ -187,7 +187,7 @@ SUBROUTINE tea_leaf()
 
           IF (tl_ch_cg_errswitch) THEN
               ! either the error has got below tolerance, or it's already going - minimum 20 steps to converge eigenvalues
-              ch_switch_check = (cheby_calc_steps .GT. 0) .OR. (error .LE. tl_ch_cg_epslim) .AND. (n .GE. 20)
+              ch_switch_check = (cheby_calc_steps .GT. 0) .OR. (error .LE. tl_ch_cg_epslim) .AND. (itcount .GE. 20)
           ELSE
               ! enough steps have passed and error < 1, otherwise it's nowhere near converging on eigenvalues
               ch_switch_check = (itcount .GE. tl_ch_cg_presteps) .AND. (error .le. 1.0_8)
@@ -407,7 +407,7 @@ SUBROUTINE tea_leaf()
             IF (profiler_on) profiler%dot_product= profiler%dot_product+ (timer() - dot_product_time)
             IF (profiler_on) solve_time = solve_time + (timer()-dot_product_time)
             alpha = rro/pw
-            IF(tl_use_chebyshev .OR. tl_use_ppcg) cg_alphas(n) = alpha
+            IF(tl_use_chebyshev .OR. tl_use_ppcg) cg_alphas(itcount) = alpha
 
             IF(use_fortran_kernels) THEN
               CALL tea_leaf_kernel_solve_cg_fortran_calc_ur(chunks(c)%field%x_min,&
@@ -428,7 +428,7 @@ SUBROUTINE tea_leaf()
             IF (profiler_on) profiler%dot_product= profiler%dot_product+ (timer() - dot_product_time)
             IF (profiler_on) solve_time = solve_time + (timer()-dot_product_time)
             beta = rrn/rro
-            IF(tl_use_chebyshev .OR. tl_use_ppcg) cg_betas(n) = beta
+            IF(tl_use_chebyshev .OR. tl_use_ppcg) cg_betas(itcount) = beta
 
             IF(use_fortran_kernels) THEN
               CALL tea_leaf_kernel_solve_cg_fortran_calc_p(chunks(c)%field%x_min,&
@@ -485,26 +485,28 @@ SUBROUTINE tea_leaf()
               WRITE(g_out,*)"Residual ",error
 !$          ENDIF
           ENDIF
-          IF (abs(error) .LT. eps*initial_residual) EXIT
+          IF (error.LT. eps*initial_residual) EXIT
 
         ENDDO
 
       ENDIF
 
-      IF (use_PETSC_kernels) 
-        petsc_mod=1
+      IF (use_PETSC_kernels) THEN
+        petsc_mod=1 ! Get get the iteration print consistent
         ! Substitute for PETSc Solve
 
-        CALL setupMatA_petsc(c,rx,ry)
-        CALL setupRHS_petsc(c,rx,ry)
-        CALL setupSol_petsc(c,rx,ry)
+        CALL setupMatA_petsc(1,rx,ry)
+        CALL setupRHS_petsc(1,rx,ry)
+        CALL setupSol_petsc(1,rx,ry)
 
-        IF(use_pgcg) THEN    
+        IF(use_pgcg) THEN
           CALL solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)  ! Use Paul Garrett's Approach
+          itcount=numit_cg+numit_cheby
           IF(parallel%boss) WRITE(g_out,*) 'Achieved convergence in ', numit_cg ,' CG iterations and ', numit_cheby, ' Cheby Iterations'
           IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations is : ',  total_cg_iter, ' CG Iterations and ', total_cheby_iter, ' Chebyshev Iterations'
         ELSE 
           CALL solve_petsc(numit,error)    ! Use Command Line Specified Approach
+          itcount=numit_cg+1
           IF(parallel%boss) WRITE(g_out,*) 'Achieved convergence in ', numit ,' iterations'
           IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations: ',  total_petsc_iter
         ENDIF
@@ -551,10 +553,10 @@ SUBROUTINE tea_leaf()
             WRITE(g_out,"('EXACT error calculated as', e14.7)") exact_error
           ENDIF
 
-          WRITE(g_out,"('Iteration count ',i8)") n-1
-          WRITE(0,"('Iteration count ', i8)") n-1
-          IF(tl_use_ppcg) WRITE(g_out,"('Total Iteration count ',i8)") (n-1)*tl_ppcg_inner_steps
-          IF(tl_use_ppcg) WRITE(0,"('Total Iteration count ', i8)") (n-1)*tl_ppcg_inner_steps
+          WRITE(g_out,"('Iteration count ',i8)") itcount-1+petsc_mod
+          WRITE(0,"('Iteration count ', i8)") itcount-1+petsc_mod
+          IF(tl_use_ppcg) WRITE(g_out,"('Total Iteration count ',i8)") (itcount-1)*tl_ppcg_inner_steps
+          IF(tl_use_ppcg) WRITE(0,"('Total Iteration count ', i8)") (itcount-1)*tl_ppcg_inner_steps
 !$      ENDIF
       ENDIF
 
