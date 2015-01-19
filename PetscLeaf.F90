@@ -74,6 +74,8 @@ SUBROUTINE setup_petsc(eps,max_iters)
     CALL DMSetMatType(petscDA,'mpiaij',perr)
   ENDIF
 
+  CALL DMCreateMatrix(petscDA,A,perr)
+
   ! Setup the initial solution vector
   CALL DMCreateGlobalVector(petscDA,X,perr)
 
