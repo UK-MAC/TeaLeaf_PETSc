@@ -59,8 +59,7 @@
 #        make IEEE=1              # Will select debug options as long as a compiler is selected as well
 # e.g. make COMPILER=INTEL MPI_COMPILER=mpiifort C_MPI_COMPILER=mpiicc DEBUG=1 IEEE=1 # will compile with the intel compiler with intel debug and ieee flags included
 
-PETSC_DIR=./libs/petsc
-PETSC_DIR=./petsc-3.4.3/linux-static/
+PETSC_DIR=~/PETSc/petsc-3.5.2/arch-linux2-c-debug
 LAPACK_DIR=/opt/lapack/3.4.2/intel-13.1.1.163
 
 #HYPRE_DIR=/home/jad/opt/hypre/2.8.0b/static/intel/12.0/mpich/1.4.1p1/
@@ -130,31 +129,33 @@ endif
 
 COM_PATH_P=
 PETSC_SOURCE=PetscLeaf.F90
-PETSC_DIR=${COM_PATH_P}/petsc/3.4.3
+PETSC_DIR=${COM_PATH_P}/petsc/3.5.2
 LAPACK_DIR=
 ML_LIB= -L${COM_PATH_P}/ml/6.2/lib -lml
 SPOOLES_LIB= -L${PETSC_DIR}/spooles/2.2/lib -lspooles
 HYPRE_LIB=-L${COM_PATH_P}/hypre/2.8.0b/lib -lHYPRE
 PETSC_LIB=-L${PETSC_DIR}/lib -lpetsc \
 	  ${HYPRE_LIB} ${ML_LIB} ${SPOOLES_LIB}
+PETSC_INC=-I${PETSC_DIR}/include
 BLASLAPACK_LIB=0
-REQ_LIB=
+REQ_LIB=-lm -lmpi_cxx -lstdc++
 
-ifdef(NO_PETSC)
+ifdef NO_PETSC 
   COM_PATH_P=
   PETSC_SOURCE=PetscLeaf_dummy.F90
   PETSC_DIR=
+  PETSC_INC=
   LAPACK_DIR=
   PETSC_LIB=
   HYPRE_LIB=
   ML_LIB=
   SPOOLES_LIB=
-  BLASLAPACK_LIB=0
-  REQ_LIB=
+  BLASLAPACK_LIB=
+  REQ_LIB= -lstdc++
 endif
 
-FLAGS=${FLAGS_$(COMPILER)} ${OMP} ${I3E} ${OPTIONS} -I${PETSC_DIR}/include -lm -lmpi_cxx -lstdc++ 
-CFLAGS=${CFLAGS_$(COMPILER)} ${OMP} ${I3E} ${C_OPTIONS} -I${PETSC_DIR}/include -c
+FLAGS=${FLAGS_$(COMPILER)} ${OMP} ${I3E} ${OPTIONS} ${PETSC_INC} $(REQ_LIB)
+CFLAGS=${CFLAGS_$(COMPILER)} ${OMP} ${I3E} ${C_OPTIONS} ${PETSC_INC} -c
 MPI_COMPILER=mpif90
 C_MPI_COMPILER=mpicc
 

@@ -231,7 +231,7 @@ SUBROUTINE tea_leaf()
               IF (parallel%boss) THEN
 !$              IF(OMP_GET_THREAD_NUM().EQ.0) THEN
                   WRITE(g_out,'(a,i3,a,e15.7)') "Switching after ",itcount," CG its, error ",rro
-                  WRITE(g_out,'(a,e14.6,a,e14.6,a,e14.6,a,e14.6)')"Eigen min ",eigmin," Eigen max ",eigmax," Condition number ",cn, &
+                  WRITE(g_out,'(a,e14.6,a,e14.6,a,e14.6,a,e14.6)')"Eigen min ",eigmin," Eigen max ",eigmax," Condition number ",cn,&
                                                                   " Error ",error
                   WRITE(0,'(a,i3,a,e15.7)') "Switching after ",itcount," CG its, error ",rro
                   WRITE(0,'(a,e14.6,a,e14.6,a,e14.6,a,e14.6)')"Eigen min ",eigmin," Eigen max ",eigmax," Condition number ",cn, &
@@ -502,8 +502,10 @@ SUBROUTINE tea_leaf()
         IF(use_pgcg) THEN
           CALL solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)  ! Use Paul Garrett's Approach
           itcount=numit_cg+numit_cheby
-          IF(parallel%boss) WRITE(g_out,*) 'Achieved convergence in ', numit_cg ,' CG iterations and ', numit_cheby, ' Cheby Iterations'
-          IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations is : ',  total_cg_iter, ' CG Iterations and ', total_cheby_iter, ' Chebyshev Iterations'
+          IF(parallel%boss) WRITE(g_out,*) 'Achieved convergence in ', numit_cg ,' CG iterations and ', numit_cheby, &
+                                           ' Cheby Iterations'
+          IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations is : ',  total_cg_iter, ' CG Iterations and ', &
+                                           total_cheby_iter, ' Chebyshev Iterations'
         ELSE 
           CALL solve_petsc(numit,error)    ! Use Command Line Specified Approach
           itcount=numit_cg+1
