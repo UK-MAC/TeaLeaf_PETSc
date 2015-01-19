@@ -67,8 +67,7 @@
 # make PETSC_DIR=/home/usid/petsc-3.5.2 PETSC_ARCH=arch-linux2-c-opt all
 # export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/usid/petsc-3.5.2/arch-linux2-c-opt/lib/
 # cd /home/usid/TeaLeaf_PETSc
-# export COM_PATH_P=/home/usid/petsc-3.5.2 # Or edit makefile
-# make
+# COM_PATH_P=home/usid/petsc-3.5.2 make
 
 ifndef COMPILER
   MESSAGE=select a compiler to compile in OpenMP, e.g. make COMPILER=INTEL
@@ -129,7 +128,6 @@ ifdef IEEE
   I3E=$(I3E_$(COMPILER))
 endif
 
-COM_PATH_P=/home/used/petsc-3.5.2
 PETSC_SOURCE=PetscLeaf.F90
 PETSC_DIR=${COM_PATH_P}/arch-linux2-c-opt
 PETSC_DIR_F=${COM_PATH_P}
