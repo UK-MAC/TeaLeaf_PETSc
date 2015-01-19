@@ -60,7 +60,8 @@
 # e.g. make COMPILER=INTEL MPI_COMPILER=mpiifort C_MPI_COMPILER=mpiicc DEBUG=1 IEEE=1 # will compile with the intel compiler with intel debug and ieee flags included
 
 # Example of how do you download, install and compile PETSc 4.5.2, assuming installing in /home/usid, with MPICH
-# using the GNU compiler. It might work with others but might need maths libs in lib paths
+# using the GNU compiler. It could work with others but might need maths libs in lib paths
+# cd /home/usid
 # git clone -b maint https://bitbucket.org/petsc/petsc petsc-3.5.2
 # cd petsc-3.5.2
 # ./configure --download-fblaslapack --download-hypre --download-mpich --with-debugging=0 --with-c2html=0
