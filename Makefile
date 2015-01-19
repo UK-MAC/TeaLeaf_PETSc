@@ -59,11 +59,16 @@
 #        make IEEE=1              # Will select debug options as long as a compiler is selected as well
 # e.g. make COMPILER=INTEL MPI_COMPILER=mpiifort C_MPI_COMPILER=mpiicc DEBUG=1 IEEE=1 # will compile with the intel compiler with intel debug and ieee flags included
 
-# Example of how do you download, install PETSc 3.5.2, assuming installing /home/usid, with MPICH
+# Example of how do you download, install and compile PETSc 4.5.2, assuming installing in /home/usid, with MPICH
+# using the GNU compiler. It might work with others but might need maths libs in lib paths
 # git clone -b maint https://bitbucket.org/petsc/petsc petsc-3.5.2
-# ./configure --download-fblaslapack --download-hypre --with-mpi-dir=/modules/modules/mpich/3.1.3/ --with-debugging=0
+# cd petsc-3.5.2
+# ./configure --download-fblaslapack --download-hypre --download-mpich --with-debugging=0 --with-c2html=0
 # make PETSC_DIR=/home/usid/petsc-3.5.2 PETSC_ARCH=arch-linux2-c-opt all
 # export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/usid/petsc-3.5.2/arch-linux2-c-opt/lib/
+# cd /home/usid/TeaLeaf_PETSc
+# export COM_PATH_P=/home/usid/petsc-3.5.2 # Or edit makefile
+# make
 
 ifndef COMPILER
   MESSAGE=select a compiler to compile in OpenMP, e.g. make COMPILER=INTEL
@@ -124,7 +129,7 @@ ifdef IEEE
   I3E=$(I3E_$(COMPILER))
 endif
 
-COM_PATH_P=/home/usid/petsc-3.5.2
+COM_PATH_P=/home/used/petsc-3.5.2
 PETSC_SOURCE=PetscLeaf.F90
 PETSC_DIR=${COM_PATH_P}/arch-linux2-c-opt
 PETSC_DIR_F=${COM_PATH_P}
@@ -183,7 +188,6 @@ tea_leaf: c_lover *.f90 Makefile
 	diffuse.f90                     \
 	timer_c.o                       \
 	$(PETSC_LIB)   			\
-	$(BLASLAPACK_LIB)		\
 	$(REQ_LIB)			\
 	-o tea_leaf; echo $(MESSAGE)
 
