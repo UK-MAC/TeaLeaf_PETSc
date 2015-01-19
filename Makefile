@@ -59,14 +59,11 @@
 #        make IEEE=1              # Will select debug options as long as a compiler is selected as well
 # e.g. make COMPILER=INTEL MPI_COMPILER=mpiifort C_MPI_COMPILER=mpiicc DEBUG=1 IEEE=1 # will compile with the intel compiler with intel debug and ieee flags included
 
-PETSC_DIR=~/PETSc/petsc-3.5.2/arch-linux2-c-debug
-LAPACK_DIR=/opt/lapack/3.4.2/intel-13.1.1.163
-
-#HYPRE_DIR=/home/jad/opt/hypre/2.8.0b/static/intel/12.0/mpich/1.4.1p1/
-#PETSC_DIR=/home/jad/opt/petsc/3.3-p6/nodebug/static/intel/12.0/mpich/1.4.1p1/
-#SPOOLES_DIR=/home/jad/opt/spooles/2.2/static/intel/12.0/mpich/1.4.1p1/
-#ML_DIR=/home/jad/opt/ml//6.2/static/intel/12.0/mpich/1.4.1p1/
-#LAPACK_DIR=/home/jad/opt/lapack/3.3.0/static/intel/12.0/
+# Example of how do you download, install PETSc 3.5.2, assuming installing /home/usid, with MPICH
+# git clone -b maint https://bitbucket.org/petsc/petsc petsc-3.5.2
+# ./configure --download-fblaslapack --download-hypre --with-mpi-dir=/modules/modules/mpich/3.1.3/ --with-debugging=0
+# make PETSC_DIR=/home/usid/petsc-3.5.2 PETSC_ARCH=arch-linux2-c-opt all
+# export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/usid/petsc-3.5.2/arch-linux2-c-opt/lib/
 
 ifndef COMPILER
   MESSAGE=select a compiler to compile in OpenMP, e.g. make COMPILER=INTEL
@@ -127,31 +124,21 @@ ifdef IEEE
   I3E=$(I3E_$(COMPILER))
 endif
 
-COM_PATH_P=
+COM_PATH_P=/home/usid/petsc-3.5.2
 PETSC_SOURCE=PetscLeaf.F90
-PETSC_DIR=${COM_PATH_P}/petsc/3.5.2
-LAPACK_DIR=
-ML_LIB= -L${COM_PATH_P}/ml/6.2/lib -lml
-SPOOLES_LIB= -L${PETSC_DIR}/spooles/2.2/lib -lspooles
-HYPRE_LIB=-L${COM_PATH_P}/hypre/2.8.0b/lib -lHYPRE
-PETSC_LIB=-L${PETSC_DIR}/lib -lpetsc \
-	  ${HYPRE_LIB} ${ML_LIB} ${SPOOLES_LIB}
-PETSC_INC=-I${PETSC_DIR}/include
-BLASLAPACK_LIB=0
-REQ_LIB=-lm -lmpi_cxx -lstdc++
+PETSC_DIR=${COM_PATH_P}/arch-linux2-c-opt
+PETSC_DIR_F=${COM_PATH_P}
+PETSC_LIB=-L${PETSC_DIR}/lib -lpetsc
+PETSC_INC=-I${PETSC_DIR}/include -I${PETSC_DIR_F}/include/
+REQ_LIB=-lstdc++
 
 ifdef NO_PETSC 
   COM_PATH_P=
   PETSC_SOURCE=PetscLeaf_dummy.F90
   PETSC_DIR=
   PETSC_INC=
-  LAPACK_DIR=
+  PETSC_DIR_F=
   PETSC_LIB=
-  HYPRE_LIB=
-  ML_LIB=
-  SPOOLES_LIB=
-  BLASLAPACK_LIB=
-  REQ_LIB= -lstdc++
 endif
 
 FLAGS=${FLAGS_$(COMPILER)} ${OMP} ${I3E} ${OPTIONS} ${PETSC_INC} $(REQ_LIB)
