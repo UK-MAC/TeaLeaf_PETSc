@@ -508,7 +508,7 @@ SUBROUTINE tea_leaf()
                                            total_cheby_iter, ' Chebyshev Iterations'
         ELSE 
           CALL solve_petsc(numit,error)    ! Use Command Line Specified Approach
-          itcount=numit_cg+1
+          itcount=numit+1
           IF(parallel%boss) WRITE(g_out,*) 'Achieved convergence in ', numit ,' iterations'
           IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations: ',  total_petsc_iter
         ENDIF
