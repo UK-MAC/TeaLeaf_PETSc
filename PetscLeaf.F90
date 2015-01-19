@@ -44,7 +44,7 @@ SUBROUTINE setup_petsc(eps,max_iters)
   ! clover_decompose MUST be called first
 
   CALL DMDACreate2D(PETSC_COMM_WORLD,                      &
-                    DMDA_BOUNDARY_NONE,DMDA_BOUNDARY_NONE, &
+                    DM_BOUNDARY_NONE,DM_BOUNDARY_NONE,     &
                     DMDA_STENCIL_STAR,                     &
                     grid%x_cells,grid%y_cells,             &
                     px,py,                                 &
@@ -54,7 +54,7 @@ SUBROUTINE setup_petsc(eps,max_iters)
 
   ! Setup the KSP Solver
   CALL KSPCreate(MPI_COMM_WORLD,kspObj,perr)
-  CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
+  CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_REAL,PETSC_DEFAULT_REAL,max_iters,perr)
 
   CALL KSPSetCheckNormIteration(kspObj,-1,perr)
   CALL KSPSetFromOptions(kspObj,perr)
@@ -69,9 +69,9 @@ SUBROUTINE setup_petsc(eps,max_iters)
   CALL MPI_Comm_Size(MPI_COMM_WORLD,mpisize,perr)
 
   IF(mpisize .EQ. 1) THEN
-    CALL DMCreateMatrix(petscDA,'seqaij',A,perr)
+    CALL DMSetMatType(petscDA,'seqaij',perr)
   ELSE
-    CALL DMCreateMatrix(petscDA,'mpiaij',A,perr)
+    CALL DMSetMatType(petscDA,'mpiaij',perr)
   ENDIF
 
   ! Setup the initial solution vector
@@ -345,7 +345,7 @@ SUBROUTINE solve_petsc(numit,error)
     KSPConvergedReason :: reason
     PetscReal :: residual  ! Final residual
 
-    CALL KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
+    CALL KSPSetOperators(kspObj,A,A,perr)
     CALL KSPSolve(kspObj,B,X,perr)
     CALL KSPGetIterationNumber(kspObj, numit, perr)
 
@@ -418,7 +418,7 @@ SUBROUTINE solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)
     CALL PCSetType(tPC,PCBJACOBI,perr)
 
     CALL KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
-    CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,pgcg_cg_iter,perr)
+    CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_REAL,PETSC_DEFAULT_REAL,pgcg_cg_iter,perr)
     CALL KSPSetInitialGuessNonzero(kspObj,PETSC_FALSE,perr)
 
     CALL KSPSolve(kspObj,B,X,perr)
@@ -451,7 +451,7 @@ SUBROUTINE solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)
 
       CALL KSPSetInitialGuessNonzero(kspObj,PETSC_TRUE,perr)    ! Disable zeroing of results vector (reuse for residual)
       CALL KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
-      CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
+      CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_REAL,PETSC_DEFAULT_REAL,max_iters,perr)
       CALL KSPChebyshevSetEigenValues(kspObj,emax,emin,perr)
 
       CALL KSPSolve(kspObj,B,X,perr)
