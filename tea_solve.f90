@@ -587,8 +587,8 @@ SUBROUTINE tea_leaf()
 
   IF (profiler_on .AND. parallel%boss) THEN
     total_solve_time = (timer() - total_solve_time)
-    WRITE(0, "(a16,f16.10,a7,i7,a16,f16.10)") "Solve Time",total_solve_time,"Its",n,"Time Per It",total_solve_time/n
-    WRITE(g_out, "(a16,f16.10,a7,i7,a16,f16.10)") "Solve Time",total_solve_time,"Its",n,"Time Per It",total_solve_time/n
+    WRITE(0, "(a16,f16.10,a7,i7,a16,f16.10)") "Solve Time",total_solve_time,"Its",itcount,"Time Per It",total_solve_time/itcount
+    WRITE(g_out, "(a16,f16.10,a7,i7,a16,f16.10)") "Solve Time",total_solve_time,"Its",itcount,"Time Per It",total_solve_time/itcount
   ENDIF
 
   IF (profiler_on .AND. tl_use_chebyshev) THEN
