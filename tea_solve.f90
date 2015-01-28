@@ -491,7 +491,7 @@ SUBROUTINE tea_leaf()
 
       ENDIF
 
-      IF (use_PETSC_kernels) THEN
+      IF(use_PETSC_kernels) THEN
         petsc_mod=1 ! Get get the iteration print consistent
         ! Substitute for PETSc Solve
 
@@ -501,14 +501,14 @@ SUBROUTINE tea_leaf()
 
         IF(use_pgcg) THEN
           CALL solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)  ! Use Paul Garrett's Approach
-          itcount=numit_cg+numit_cheby
-          IF(parallel%boss) WRITE(g_out,*) 'Achieved convergence in ', numit_cg ,' CG iterations and ', numit_cheby, &
-                                           ' Cheby Iterations'
-          IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations is : ',  total_cg_iter, ' CG Iterations and ', &
+          IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations is : ',  total_cg_iter, ' CG Iterations and ',&
                                            total_cheby_iter, ' Chebyshev Iterations'
+          itcount=numit_cg+numit_cheby
+          IF(parallel%boss) WRITE(g_out,*) 'Achieved convergence in ', numit_cg ,' CG iterations and ', numit_cheby,&
+                                           ' Cheby Iterations'
         ELSE 
           CALL solve_petsc(numit,error)    ! Use Command Line Specified Approach
-          itcount=numit+1
+          itcount=numit-1
           IF(parallel%boss) WRITE(g_out,*) 'Achieved convergence in ', numit ,' iterations'
           IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations: ',  total_petsc_iter
         ENDIF
