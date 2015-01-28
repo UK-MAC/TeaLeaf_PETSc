@@ -103,7 +103,7 @@ SUBROUTINE tea_leaf()
         ry = dt/(chunks(c)%field%celldy(chunks(c)%field%y_min)**2)
       ENDIF
 
-      IF(tl_use_cg .OR. tl_use_chebyshev .OR. tl_use_ppcg .OR. use_PETSC_kernels) THEN
+      IF(tl_use_cg .OR. tl_use_chebyshev .OR. tl_use_ppcg .OR. use_PETSC_kernels .OR. tl_use_jacobi) THEN
         ! All 3 of these solvers use the CG kernels and this is also called for PETSc to get the initial residual
         IF(use_fortran_kernels) THEN
           CALL tea_leaf_kernel_init_cg_fortran(chunks(c)%field%x_min, &
@@ -492,7 +492,7 @@ SUBROUTINE tea_leaf()
       ENDIF
 
       IF(use_PETSC_kernels) THEN
-        petsc_mod=1 ! Get get the iteration print consistent
+        petsc_mod=1 ! To get the iteration print consistent
         ! Substitute for PETSc Solve
 
         CALL setupMatA_petsc(1,rx,ry)
@@ -501,16 +501,17 @@ SUBROUTINE tea_leaf()
 
         IF(use_pgcg) THEN
           CALL solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)  ! Use Paul Garrett's Approach
-          IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations is : ',  total_cg_iter, ' CG Iterations and ',&
-                                           total_cheby_iter, ' Chebyshev Iterations'
-          itcount=numit_cg+numit_cheby
           IF(parallel%boss) WRITE(g_out,*) 'Achieved convergence in ', numit_cg ,' CG iterations and ', numit_cheby,&
                                            ' Cheby Iterations'
+          itcount=numit_cg+numit_cheby
+          IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations is : ',  total_cg_iter, ' CG Iterations and ',&
+                                           total_cheby_iter, ' Chebyshev Iterations'
+          itcount=numit_cg+1
         ELSE 
           CALL solve_petsc(numit,error)    ! Use Command Line Specified Approach
-          itcount=numit-1
           IF(parallel%boss) WRITE(g_out,*) 'Achieved convergence in ', numit ,' iterations'
           IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations: ',  total_petsc_iter
+          itcount=numit-1
         ENDIF
    
         CALL getSolution_petsc(1)
@@ -587,8 +588,10 @@ SUBROUTINE tea_leaf()
 
   IF (profiler_on .AND. parallel%boss) THEN
     total_solve_time = (timer() - total_solve_time)
-    WRITE(0, "(a16,f16.10,a7,i7,a16,f16.10)") "Solve Time",total_solve_time,"Its",itcount,"Time Per It",total_solve_time/itcount
-    WRITE(g_out, "(a16,f16.10,a7,i7,a16,f16.10)") "Solve Time",total_solve_time,"Its",itcount,"Time Per It",total_solve_time/itcount
+    WRITE(0, "(a16,f16.10,a7,i7,a16,f16.10)") "Solve Time",total_solve_time,"Its",itcount-1+petsc_mod, &
+                                              "Time Per It",total_solve_time/itcount
+    WRITE(g_out, "(a16,f16.10,a7,i7,a16,f16.10)") "Solve Time",total_solve_time,"Its",itcount-1+petsc_mod, &
+                                                  "Time Per It",total_solve_time/itcount
   ENDIF
 
   IF (profiler_on .AND. tl_use_chebyshev) THEN

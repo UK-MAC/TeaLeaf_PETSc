@@ -101,21 +101,6 @@ flags, `OPTIONS` and `C_OPTIONS`, one for the Fortran and one for the C options.
 
 `make COMPILER=INTEL OPTIONS=-xavx C_OPTIONS=-xavx`
 
-Finally, a `DEBUG` flag can be set to use debug options for a specific compiler.
-
-`make COMPILER=PGI DEBUG=1`
-
-These flags are also compiler specific, and so will depend on the `COMPILER` 
-environment variable.
-
-So on a system without the standard MPI wrappers, for a build that requires 
-OpenMP, IEEE and AVX this would look like so:-
-
-```
-make COMPILER=INTEL MPI_COMPILER=mpiifort C_MPI_COMPILER=mpiicc IEEE=1 \
-OPTIONS="-xavx" C_OPTIONS="-xavx"
-```
-
 A `DEBUG` flag can be set to use debug options for a specific compiler.
 
 `make COMPILER=PGI DEBUG=1`
@@ -126,11 +111,12 @@ environment variable.
 So on a system without the standard MPI wrappers, for a build that requires 
 OpenMP, IEEE and AVX this would look like so:-
 
-
+```
 make COMPILER=INTEL MPI_COMPILER=mpiifort C_MPI_COMPILER=mpiicc IEEE=1 \
 OPTIONS="-xavx" C_OPTIONS="-xavx"
+```
 
-If PETSc is not available on yuor system them it is possible to make TeaLeaf with the reference solvers by specifying the make with NO_PETSC=1.
+If PETSc is not available on your system them it is possible to make TeaLeaf with the reference solvers by specifying the make with NO_PETSC=1.
 
 ### File Input
 

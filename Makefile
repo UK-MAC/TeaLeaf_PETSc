@@ -141,7 +141,7 @@ REQ_LIB_INTEL=-lstdc++ \
          -lmkl_intel_thread \
          -lmkl_intel_lp64 \
          -liomp5 \
-         -l/usr/lib64/ -lX11
+         -L/usr/lib64/ -lX11
 REQ_LIB_GNU=-lstdc++
 REQ_LIB_PGI=-lstdc++
 REQ_LIB_SUN=-lstdc++
