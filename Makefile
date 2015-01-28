@@ -151,7 +151,7 @@ REQ_LIB_XL=-lstdc++
 
 PETSC_SOURCE=PetscLeaf.F90
 PETSC_DIR=${COM_PATH_P}
-PETSC_DIR_F=${COM_PATH_P}
+PETSC_DIR_F=${COM_PATH_P}/..
 PETSC_LIB=-L${PETSC_DIR}/lib -lpetsc
 PETSC_INC=-I${PETSC_DIR}/include -I${PETSC_DIR_F}/include/
 REQ_LIB_=-lstdc++
