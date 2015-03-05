@@ -1,0 +1,60 @@
+#!/bin/bash
+# Set max wallclock time to one hour
+#PBS -l walltime=00:40:00
+
+# Set name of job shown in showq
+#PBS -N tealeaf
+#PBS -j oe
+
+# Use submission environment
+#PBS -V
+
+# Run the job on one node
+#PBS -l select=2:ncpus=56:mpiprocs=4
+
+# Start job from the directory it was submitted
+cd $PBS_O_WORKDIR
+
+echo "PBS nodes:"
+cat $PBS_NODEFILE
+echo
+
+CORES=$[ `cat $PBS_NODEFILE | wc -l` ]
+NODES=$[ `uniq $PBS_NODEFILE | wc -l` ]
+PERNODE=$((CORES / NODES ))
+
+#If you need to load the environment
+#module load gcc
+
+export OMP_NUM_THREADS=$((28 / PERNODE))
+export PETSC_NUM_THREADS=$((28 / PERNODE))
+
+#export MPI_DSM_DISTRIBUTE=1
+export MPI_DSM_CPULIST=0,7,14,21
+export MPI_DSM_VERBOSE=1
+export KMP_AFFINITY=disabled
+export OMPLACE_AFFINITY_COMPAT=ON
+export PS_FOLLOW_DL=1
+
+# Run benchmarks
+for benchmark in tea_bm_short ; do
+  echo
+  echo \*\*\* Run benchmark ${benchmark} \*\*\*
+  echo
+  ln -sf ${benchmark}.in tea.in
+#  mpiexec_mpt -np ${CORES} psrun -f -p -c ./itimer.xml ./tea_leaf \
+  mpiexec_mpt -np ${CORES} ./tea_leaf \
+    -ksp_type cg -pc_type none \
+    -threadcomm_type openmp \
+    -threadcomm_nthreads ${PETSC_NUM_THREADS} \
+    -threadcomm_pernode ${PERNODE} \
+    -threadcomm_affinities 0-$((PETSC_NUM_THREADS * PERNODE)) \
+    -log_summary
+  mv tea.out ${benchmark}.out
+  echo
+  echo \*\*\* Benchmark ${benchmark} completed \*\*\*
+  echo
+done
+
+echo "Job completed ok!"
+
