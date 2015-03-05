@@ -29,6 +29,8 @@ SUBROUTINE diffuse
 
   IMPLICIT NONE
 
+#include "finclude/petscsysdef.h"
+
   INTEGER         :: loc(1)
   REAL(KIND=8)    :: timer,timerstart,wall_clock,step_clock
   
@@ -36,6 +38,12 @@ SUBROUTINE diffuse
   REAL(KIND=8)    :: step_time,step_grind
   REAL(KIND=8)    :: first_step,second_step
   REAL(KIND=8)    :: kernel_total,totals(parallel%max_task)
+
+  PetscErrorCode :: ierr
+  PetscLogStage :: stage1, stage2, stage3
+
+  CALL PetscLogStageRegister('Assemble',stage1,ierr)
+  CALL PetscLogStageRegister('Solve',stage2,ierr)
 
   timerstart = timer()
 

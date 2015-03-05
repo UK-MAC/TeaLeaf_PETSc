@@ -31,6 +31,8 @@ MODULE tea_leaf_module
 
   IMPLICIT NONE
 
+#include "finclude/petscsysdef.h"
+
 CONTAINS
 
 SUBROUTINE tea_leaf()
@@ -60,6 +62,8 @@ SUBROUTINE tea_leaf()
   INTEGER :: cg_calc_steps
 
   REAL(KIND=8) :: cg_time, ch_time, total_solve_time, ch_per_it, cg_per_it, iteration_time
+
+  PetscErrorCode :: ierr
 
   cg_time = 0.0_8
   ch_time = 0.0_8
@@ -495,9 +499,11 @@ SUBROUTINE tea_leaf()
         petsc_mod=1 ! To get the iteration print consistent
         ! Substitute for PETSc Solve
 
+        CALL PetscLogStagePush(1,ierr)
         CALL setupMatA_petsc(1,rx,ry)
         CALL setupRHS_petsc(1,rx,ry)
         CALL setupSol_petsc(1,rx,ry)
+        CALL PetscLogStagePop(ierr)
 
         IF(use_pgcg) THEN
           CALL solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)  ! Use Paul Garrett's Approach
@@ -508,7 +514,9 @@ SUBROUTINE tea_leaf()
                                            total_cheby_iter, ' Chebyshev Iterations'
           itcount=numit_cg+1
         ELSE 
+          CALL PetscLogStagePush(2,ierr)
           CALL solve_petsc(numit,error)    ! Use Command Line Specified Approach
+          CALL PetscLogStagePop(ierr)
           IF(parallel%boss) WRITE(g_out,*) 'Achieved convergence in ', numit ,' iterations'
           IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations: ',  total_petsc_iter
           itcount=numit-1
