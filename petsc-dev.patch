@@ -1,0 +1,154 @@
+diff --git a/src/sys/threadcomm/examples/tutorials/ex1.c b/src/sys/threadcomm/examples/tutorials/ex1.c
+index d052ccb..485bf01 100644
+--- a/src/sys/threadcomm/examples/tutorials/ex1.c
++++ b/src/sys/threadcomm/examples/tutorials/ex1.c
+@@ -9,10 +9,10 @@ T*/
+ */
+ #include <petscthreadcomm.h>
+ 
+-PetscErrorCode kernel_func1(PetscInt myrank,PetscInt *ranks,PetscScalar *values)
++PetscErrorCode kernel_func1(PetscInt myrank,PetscInt *ranks,PetscScalar *values, PetscInt *affinities)
+ {
+   values[myrank] *= 1;
+-  printf("First Kernel:My rank is %d, x = %f\n",ranks[myrank],PetscRealPart(values[myrank]));
++  printf("First Kernel:My rank is %d, affinity is %d, x = %f\n",ranks[myrank],affinities[myrank],PetscRealPart(values[myrank]));
+   return(0);
+ }
+ 
+@@ -32,6 +32,9 @@ int main(int argc,char **argv)
+   PetscInt       nthreads,i;
+   PetscInt       *ranks;
+   PetscScalar    *values;
++  PetscInt       *affinities;
++  int            myrank = 0;
++  PetscThreadComm tcomm;
+ 
+   PetscInitialize(&argc,&argv,(char*)0,help);
+ 
+@@ -45,7 +48,18 @@ int main(int argc,char **argv)
+     ranks[i] = i; values[i] = i;
+   }
+ 
+-  ierr = PetscThreadCommRunKernel(PETSC_COMM_WORLD,(PetscThreadKernel)kernel_func1,2,ranks,values);CHKERRQ(ierr);
++  ierr = PetscMalloc1(nthreads,&affinities);CHKERRQ(ierr);
++ // ierr = PetscCommGetThreadComm(PETSC_COMM_WORLD,&tcomm);
++  
++//  ierr = PetscThreadCommSetHybridAffinities(tcomm,NULL);CHKERRQ(ierr);
++  ierr = PetscThreadCommGetAffinities(PETSC_COMM_WORLD,affinities);CHKERRQ(ierr);
++  printf("Affinities = ", myrank);
++  for (i=0; i < nthreads; i++) {
++    printf("%d ", affinities[i]);
++  }
++  printf("\n");
++
++  ierr = PetscThreadCommRunKernel(PETSC_COMM_WORLD,(PetscThreadKernel)kernel_func1,3,ranks,values,affinities);CHKERRQ(ierr);
+   ierr = PetscThreadCommRunKernel(PETSC_COMM_WORLD,(PetscThreadKernel)kernel_func2,2,ranks,values);CHKERRQ(ierr);
+ 
+   ierr = PetscThreadCommBarrier(PETSC_COMM_WORLD);CHKERRQ(ierr);
+diff --git a/src/sys/threadcomm/interface/threadcomm.c b/src/sys/threadcomm/interface/threadcomm.c
+index e7739ab..d8aa936 100644
+--- a/src/sys/threadcomm/interface/threadcomm.c
++++ b/src/sys/threadcomm/interface/threadcomm.c
+@@ -436,6 +436,52 @@ PetscErrorCode PetscThreadCommSetAffinities(PetscThreadComm tcomm,const PetscInt
+   PetscFunctionReturn(0);
+ }
+ 
++PetscErrorCode PetscThreadCommSetHybridAffinities(PetscThreadComm tcomm,PetscInt affinities[])
++{
++  PetscErrorCode ierr;
++  PetscBool      flg;
++  PetscInt       start;
++  PetscInt       nthreads;
++  PetscInt       myrank;
++  PetscInt       nmax=tcomm->nworkThreads;
++  PetscInt       pernode=1;
++
++  PetscFunctionBegin;
++  
++  MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
++
++  ierr = PetscOptionsGetInt(NULL,"-threadcomm_pernode",&pernode,&flg);CHKERRQ(ierr);
++
++  if (pernode == 1) {
++    ierr = PetscThreadCommSetAffinities(tcomm,affinities);
++  }
++  else {
++    nthreads=pernode * (tcomm->nworkThreads);
++    start = (myrank % pernode) * (tcomm->nworkThreads);
++
++    ierr = PetscFree(tcomm->affinities);CHKERRQ(ierr);
++    ierr = PetscMalloc1(nmax,&tcomm->affinities);CHKERRQ(ierr);
++
++    if (!affinities) {
++      ierr = PetscMalloc1(nthreads,&affinities);CHKERRQ(ierr);
++      ierr = PetscOptionsGetIntArray(NULL,"-threadcomm_affinities",affinities,&nthreads,&flg);CHKERRQ(ierr);
++      if (flg) {
++        ierr = PetscMemcpy(tcomm->affinities,&affinities[start],tcomm->nworkThreads*sizeof(PetscInt));CHKERRQ(ierr);
++      }
++      else{
++        // PETSc default affinities
++        PetscInt i;
++        for (i=0; i < nthreads; i++) tcomm->affinities[i] = start + i % nthreads;
++      }
++    }
++    else {
++      ierr = PetscMemcpy(tcomm->affinities,&affinities[start],tcomm->nworkThreads*sizeof(PetscInt));CHKERRQ(ierr);
++    }
++  }
++
++  PetscFunctionReturn(0);
++}
++
+ #undef __FUNCT__
+ #define __FUNCT__ "PetscThreadCommGetAffinities"
+ /*@C
+@@ -1222,7 +1268,7 @@ PetscErrorCode PetscThreadCommWorldInitialize(void)
+   ierr = PetscThreadCommCreate(&PETSC_THREAD_COMM_WORLD);CHKERRQ(ierr);
+   tcomm = PETSC_THREAD_COMM_WORLD;
+   ierr = PetscThreadCommSetNThreads(tcomm,PETSC_DECIDE);CHKERRQ(ierr);
+-  ierr = PetscThreadCommSetAffinities(tcomm,NULL);CHKERRQ(ierr);
++  ierr = PetscThreadCommSetHybridAffinities(tcomm,NULL);CHKERRQ(ierr);
+   ierr = PetscNew(&PetscJobQueue);CHKERRQ(ierr);
+ 
+   tcomm->nkernels = 16;
+diff --git a/src/sys/threadcomm/interface/threadcommregi.c b/src/sys/threadcomm/interface/threadcommregi.c
+index d27df28..9334848 100644
+--- a/src/sys/threadcomm/interface/threadcommregi.c
++++ b/src/sys/threadcomm/interface/threadcommregi.c
+@@ -5,7 +5,7 @@ PETSC_EXTERN PetscErrorCode PetscThreadCommCreate_NoThread(PetscThreadComm);
+ #if defined(PETSC_HAVE_PTHREADCLASSES)
+ PETSC_EXTERN PetscErrorCode PetscThreadCommCreate_PThread(PetscThreadComm);
+ #endif
+-#if defined(PETSC_HAVE_OPENMPCLASSES)
++#if defined(PETSC_HAVE_OPENMP)
+ PETSC_EXTERN PetscErrorCode PetscThreadCommCreate_OpenMP(PetscThreadComm);
+ #endif
+ 
+@@ -36,7 +36,7 @@ PetscErrorCode PetscThreadCommRegisterAll(void)
+ #if defined(PETSC_HAVE_PTHREADCLASSES)
+   ierr = PetscThreadCommRegister(PTHREAD, PetscThreadCommCreate_PThread);CHKERRQ(ierr);
+ #endif
+-#if defined(PETSC_HAVE_OPENMPCLASSES)
++#if defined(PETSC_HAVE_OPENMP)
+   ierr = PetscThreadCommRegister(OPENMP,  PetscThreadCommCreate_OpenMP);CHKERRQ(ierr);
+ #endif
+   PetscFunctionReturn(0);
+diff --git a/src/vec/vec/impls/mpi/pvec2.c b/src/vec/vec/impls/mpi/pvec2.c
+index 5cf0282..aa51a7e 100644
+--- a/src/vec/vec/impls/mpi/pvec2.c
++++ b/src/vec/vec/impls/mpi/pvec2.c
+@@ -57,9 +57,14 @@ PetscErrorCode VecNorm_MPI(Vec xin,NormType type,PetscReal *z)
+   PetscFunctionBegin;
+   ierr = PetscBLASIntCast(n,&bn);CHKERRQ(ierr);
+   if (type == NORM_2 || type == NORM_FROBENIUS) {
++#if defined(PETSC_THREADCOMM_ACTIVE)
++    ierr = VecNorm_Seq(xin,type,&work);CHKERRQ(ierr);
++    work = work*work;
++#else
+     ierr = VecGetArrayRead(xin,&xx);CHKERRQ(ierr);
+     work = PetscRealPart(BLASdot_(&bn,xx,&one,xx,&one));
+     ierr = VecRestoreArrayRead(xin,&xx);CHKERRQ(ierr);
++#endif
+     ierr = MPI_Allreduce(&work,&sum,1,MPIU_REAL,MPIU_SUM,PetscObjectComm((PetscObject)xin));CHKERRQ(ierr);
+     *z   = PetscSqrtReal(sum);
+     ierr = PetscLogFlops(2.0*xin->map->n);CHKERRQ(ierr);
