@@ -1,13 +1,31 @@
-# Example of how do you download, install and compile PETSc 3.5.2, assuming installing in /home/usid, with MPICH
-# using the GNU compiler. It could work with others but might need maths libs in lib paths.
-# The variables OTHER_LIBS and HYPRE_LIB can be used to set these up
+export LANG=C
+export LC_ALL=C
 
-cd /home/usid
-git clone -b maint https://bitbucket.org/petsc/petsc petsc-3.5.2
-cd petsc-3.5.2
-./configure --download-fblaslapack --download-hypre --download-mpich --with-debugging=0 --with-c2html=0
-make PETSC_DIR=/home/usid/petsc-3.5.2 PETSC_ARCH=arch-linux2-c-opt all
-export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/usid/petsc-3.5.2/arch-linux2-c-opt/lib/
-cd /home/usid/TeaLeaf_PETSc
-COM_PATH_P=home/usid/petsc-3.5.2 make COMPILER=GNU
+# How you select a petsc compiler
+export I_MPI_CC="icc -lmpi"
+export I_MPI_CXX="icpc -lmpi"
+export I_MPI_F77="ifort -lmpi"
+export I_MPI_F90="ifort -lmpi"
 
+BLAS_FLAGS="-mkl=sequential"
+MPI_DIR=/sw/sdev/mpt-x86_64/2.11-p11155
+PREFIX=/store/jsouthern/packages/petsc/dev
+
+# Get PETSc from Bitbucket
+cd ${HOME}
+git clone https://bitbucket.org/petsc/petsc petsc-dev
+
+cd petsc-dev
+
+./configure --prefix=${PREFIX} --with-c++-support=1 --with-c-support=1 \
+  --with-cc=${I_MPI_CC} --with-cxx=${I_MPI_CXX} --with-fc=${I_MPI_F77} \
+  --with-fortran=1 --with-x11=no --with-mpi=1 --with-hypre=0 --with=spooles=0 \
+  --with-ml=0 --with-mpiexec=mpirun --with-blas-lapack-lib=${BLAS_FLAGS} \
+  --with-debugging=no PETSC_ARCH=linux-static --with-shared-libraries=0 \
+  --with-x=0 --with-threadcomm=1 --with-openmp=1 --with-pthreadclasses=1
+
+export PETSC_ARCH=linux-static
+export PETSC_DIR=${PWD}
+
+make all
+make install

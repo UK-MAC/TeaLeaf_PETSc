@@ -60,9 +60,7 @@
 # e.g. make COMPILER=INTEL MPI_COMPILER=mpiifort C_MPI_COMPILER=mpiicc DEBUG=1 IEEE=1 # will compile with the intel compiler with intel debug and ieee flags included
 
 # Example of how do you download, install and compile PETSc 3.5.2, assuming installing in /home/usid, with MPICH
-# using the GNU compiler. It could work with others but might need maths libs in lib paths.
-# The variables OTHER_LIBS and HYPRE_LIB can be used to set these up on the make line.
-# 
+# using the GNU compiler. It could work with others but might need maths libs in lib paths
 # cd /home/usid
 # git clone -b maint https://bitbucket.org/petsc/petsc petsc-3.5.2
 # cd petsc-3.5.2
@@ -70,10 +68,7 @@
 # make PETSC_DIR=/home/usid/petsc-3.5.2 PETSC_ARCH=arch-linux2-c-opt all
 # export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/usid/petsc-3.5.2/arch-linux2-c-opt/lib/
 # cd /home/usid/TeaLeaf_PETSc
-# COM_PATH_P=/home/usid/petsc-3.5.2/arch-linux2-c-opt make
-#
-# Here is an example of how you might compile with the intel compiler if the location of libraries is not already loaded via a module system.
-# COM_PATH_P=/home/usid/petsc-3.5.2/intel-13.1-opt HYPRE_LIB=/opt/hypre/2.9.0b/lib OTHER_LIBS=/opt/intel/composer_xe_2013.5.192/compiler/lib/intel64 make COMPILER=INTEL
+# COM_PATH_P=home/usid/petsc-3.5.2 make
 
 ifndef COMPILER
   MESSAGE=select a compiler to compile in OpenMP, e.g. make COMPILER=INTEL
@@ -88,7 +83,7 @@ OMP_PATHSCALE = -mp
 OMP_XL        = -qsmp=omp -qthreaded
 OMP=$(OMP_$(COMPILER))
 
-FLAGS_INTEL     = -O3 -no-prec-div -fpp
+FLAGS_INTEL     = -O3 -xCORE-AVX2 -no-prec-div -fpp -mkl=sequential
 FLAGS_SUN       = -fast -xipo=2 -Xlistv4
 FLAGS_GNU       = -O3 -march=native -funroll-loops
 FLAGS_CRAY      = -em -ra -h acc_model=fast_addr:no_deep_copy:auto_async_all
@@ -96,7 +91,7 @@ FLAGS_PGI       = -fastsse -gopt -Mipa=fast -Mlist
 FLAGS_PATHSCALE = -O3
 FLAGS_XL       = -O5 -qipa=partition=large -g -qfullpath -Q -qsigtrap -qextname=flush:timer_c:unpack_top_bottom_buffers_c:pack_top_bottom_buffers_c:unpack_left_right_buffers_c:pack_left_right_buffers_c:field_summary_kernel_c:update_halo_kernel_c:generate_chunk_kernel_c:initialise_chunk_kernel_c:calc_dt_kernel_c -qlistopt -qattr=full -qlist -qreport -qxref=full -qsource -qsuppress=1506-224:1500-036
 FLAGS_          = -O3
-CFLAGS_INTEL     = -O3 -no-prec-div -restrict -fno-alias
+CFLAGS_INTEL     = -O3 -xCORE-AVX2 -no-prec-div -restrict -fno-alias -mkl=sequential
 CFLAGS_SUN       = -fast -xipo=2
 CFLAGS_GNU       = -O3 -march=native -funroll-loops
 CFLAGS_CRAY      = -em -h list=a
@@ -106,7 +101,7 @@ CFLAGS_XL       = -O5 -qipa=partition=large -g -qfullpath -Q -qlistopt -qattr=fu
 CFLAGS_          = -O3
 
 ifdef DEBUG
-  FLAGS_INTEL     = -O0 -g -debug all -check all -traceback -check noarg_temp_created -fpp
+  FLAGS_INTEL     = -O0 -g -debug all -check all -traceback -check noarg_temp_created -mkl=sequential
   FLAGS_SUN       = -g -xopenmp=noopt -stackvar -u -fpover=yes -C -ftrap=common
   FLAGS_GNU       = -O0 -g -O -Wall -Wextra -fbounds-check
   FLAGS_CRAY      = -O0 -g -em -eD
@@ -114,7 +109,7 @@ ifdef DEBUG
   FLAGS_PATHSCALE = -O0 -g
   FLAGS_XL       = -O0 -g -qfullpath -qcheck -qflttrap=ov:zero:invalid:en -qsource -qinitauto=FF -qmaxmem=-1 -qinit=f90ptr -qsigtrap -qextname=flush:timer_c:unpack_top_bottom_buffers_c:pack_top_bottom_buffers_c:unpack_left_right_buffers_c:pack_left_right_buffers_c:field_summary_kernel_c:update_halo_kernel_c:generate_chunk_kernel_c:initialise_chunk_kernel_c:calc_dt_kernel_c
   FLAGS_          = -O0 -g
-  CFLAGS_INTEL    = -O0 -g -debug all -traceback
+  CFLAGS_INTEL    = -O0 -g -debug all -traceback -mkl=sequential
   CFLAGS_SUN      = -g -O0 -xopenmp=noopt -stackvar -u -fpover=yes -C -ftrap=common
   CFLAGS_GNU       = -O0 -g -O -Wall -Wextra -fbounds-check
   CFLAGS_CRAY     = -O0 -g -em -eD
@@ -124,7 +119,7 @@ ifdef DEBUG
 endif
 
 ifdef IEEE
-  I3E_INTEL     = -fp-model strict -fp-model source -prec-div -prec-sqrt -fpp
+  I3E_INTEL     = -fp-model strict -fp-model source -prec-div -prec-sqrt
   I3E_SUN       = -fsimple=0 -fns=no
   I3E_GNU       = -ffloat-store
   I3E_CRAY      = -hflex_mp=intolerant
@@ -134,27 +129,13 @@ ifdef IEEE
   I3E=$(I3E_$(COMPILER))
 endif
 
-REQ_LIB_INTEL=-lstdc++ \
-         -L${HYPRE_LIB} -lHYPRE \
-         -L${OTHER_LIBS} \
-         -lmkl_core \
-         -lmkl_intel_thread \
-         -lmkl_intel_lp64 \
-         -liomp5 \
-         -L/usr/lib64/ -lX11
-REQ_LIB_GNU=-lstdc++
-REQ_LIB_PGI=-lstdc++
-REQ_LIB_SUN=-lstdc++
-REQ_LIB_CRAY=-lstdc++
-REQ_LIB_PATHSCALE=-lstdc++
-REQ_LIB_XL=-lstdc++
-
+COM_PATH_P=/store/jsouthern/packages/petsc/dev
 PETSC_SOURCE=PetscLeaf.F90
-PETSC_DIR=${COM_PATH_P}
-PETSC_DIR_F=${COM_PATH_P}/..
-PETSC_LIB=-L${PETSC_DIR}/lib -lpetsc
+PETSC_DIR=${COM_PATH_P}/arch-linux2-c-opt
+PETSC_DIR_F=${COM_PATH_P}
+PETSC_LIB=-L${PETSC_DIR_F}/lib -lpetsc
 PETSC_INC=-I${PETSC_DIR}/include -I${PETSC_DIR_F}/include/
-REQ_LIB_=-lstdc++
+REQ_LIB=-lstdc++
 
 ifdef NO_PETSC 
   COM_PATH_P=
@@ -165,11 +146,10 @@ ifdef NO_PETSC
   PETSC_LIB=
 endif
 
-FLAGS=${FLAGS_$(COMPILER)} ${OMP} ${I3E} ${OPTIONS} ${PETSC_INC}
+FLAGS=${FLAGS_$(COMPILER)} ${OMP} ${I3E} ${OPTIONS} ${PETSC_INC} $(REQ_LIB)
 CFLAGS=${CFLAGS_$(COMPILER)} ${OMP} ${I3E} ${C_OPTIONS} ${PETSC_INC} -c
-MPI_COMPILER=mpif90
-C_MPI_COMPILER=mpicc
-REQ_LIB=${REQ_LIB_$(COMPILER)}
+MPI_COMPILER=ifort -lmpi
+C_MPI_COMPILER=icc -lmpi
 
 tea_leaf: c_lover *.f90 Makefile
 	$(MPI_COMPILER) $(FLAGS)	\
