@@ -10,7 +10,7 @@
 #PBS -V
 
 # Run the job on one node
-#PBS -l select=2:ncpus=56:mpiprocs=4
+#PBS -l select=1:ncpus=48:mpiprocs=6
 
 # Start job from the directory it was submitted
 cd $PBS_O_WORKDIR
@@ -26,11 +26,11 @@ PERNODE=$((CORES / NODES ))
 #If you need to load the environment
 #module load gcc
 
-export OMP_NUM_THREADS=$((28 / PERNODE))
-export PETSC_NUM_THREADS=$((28 / PERNODE))
+export OMP_NUM_THREADS=$((24 / PERNODE))
+export PETSC_NUM_THREADS=$((24 / PERNODE))
 
 #export MPI_DSM_DISTRIBUTE=1
-export MPI_DSM_CPULIST=0,7,14,21
+export MPI_DSM_CPULIST=0,4,8,12,16,20
 export MPI_DSM_VERBOSE=1
 export KMP_AFFINITY=disabled
 export OMPLACE_AFFINITY_COMPAT=ON
@@ -44,7 +44,7 @@ for benchmark in tea_bm_short ; do
   ln -sf ${benchmark}.in tea.in
 #  mpiexec_mpt -np ${CORES} psrun -f -p -c ./itimer.xml ./tea_leaf \
   mpiexec_mpt -np ${CORES} ./tea_leaf \
-    -ksp_type cg -pc_type none \
+    -ksp_type cg -pc_type bjacobi -pc_bjacobi_blocks $((PETSC_NUM_THREADS * CORES)) \
     -threadcomm_type openmp \
     -threadcomm_nthreads ${PETSC_NUM_THREADS} \
     -threadcomm_pernode ${PERNODE} \
