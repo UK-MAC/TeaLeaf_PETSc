@@ -910,7 +910,6 @@ PetscErrorCode PCSetUpOnBlocks_BJacobi_Multiblock(PC pc)
   PetscInt       i,n_local = jac->n_local;
 
   PetscFunctionBegin;
-  printf("Entering PCSetUpOnBlocks_BJacobi_Multiblock\n");
   for (i=0; i<n_local; i++) {
     ierr = KSPSetUp(jac->ksp[i]);//CHKERRQ(ierr);
   }
