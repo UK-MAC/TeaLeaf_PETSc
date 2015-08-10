@@ -436,6 +436,52 @@ PetscErrorCode PetscThreadCommSetAffinities(PetscThreadComm tcomm,const PetscInt
   PetscFunctionReturn(0);
 }
 
+PetscErrorCode PetscThreadCommSetHybridAffinities(PetscThreadComm tcomm,PetscInt affinities[])
+{
+  PetscErrorCode ierr;
+  PetscBool      flg;
+  PetscInt       start;
+  PetscInt       nthreads;
+  PetscInt       myrank;
+  PetscInt       nmax=tcomm->nworkThreads;
+  PetscInt       pernode=1;
+
+  PetscFunctionBegin;
+  
+  MPI_Comm_rank(PETSC_COMM_WORLD, &myrank);
+
+  ierr = PetscOptionsGetInt(NULL,"-threadcomm_pernode",&pernode,&flg);CHKERRQ(ierr);
+
+  if (pernode == 1) {
+    ierr = PetscThreadCommSetAffinities(tcomm,affinities);
+  }
+  else {
+    nthreads=pernode * (tcomm->nworkThreads);
+    start = (myrank % pernode) * (tcomm->nworkThreads);
+
+    ierr = PetscFree(tcomm->affinities);CHKERRQ(ierr);
+    ierr = PetscMalloc1(nmax,&tcomm->affinities);CHKERRQ(ierr);
+
+    if (!affinities) {
+      ierr = PetscMalloc1(nthreads,&affinities);CHKERRQ(ierr);
+      ierr = PetscOptionsGetIntArray(NULL,"-threadcomm_affinities",affinities,&nthreads,&flg);CHKERRQ(ierr);
+      if (flg) {
+        ierr = PetscMemcpy(tcomm->affinities,&affinities[start],tcomm->nworkThreads*sizeof(PetscInt));CHKERRQ(ierr);
+      }
+      else{
+        // PETSc default affinities
+        PetscInt i;
+        for (i=0; i < nthreads; i++) tcomm->affinities[i] = start + i % nthreads;
+      }
+    }
+    else {
+      ierr = PetscMemcpy(tcomm->affinities,&affinities[start],tcomm->nworkThreads*sizeof(PetscInt));CHKERRQ(ierr);
+    }
+  }
+
+  PetscFunctionReturn(0);
+}
+
 #undef __FUNCT__
 #define __FUNCT__ "PetscThreadCommGetAffinities"
 /*@C
@@ -1222,7 +1268,7 @@ PetscErrorCode PetscThreadCommWorldInitialize(void)
   ierr = PetscThreadCommCreate(&PETSC_THREAD_COMM_WORLD);CHKERRQ(ierr);
   tcomm = PETSC_THREAD_COMM_WORLD;
   ierr = PetscThreadCommSetNThreads(tcomm,PETSC_DECIDE);CHKERRQ(ierr);
-  ierr = PetscThreadCommSetAffinities(tcomm,NULL);CHKERRQ(ierr);
+  ierr = PetscThreadCommSetHybridAffinities(tcomm,NULL);CHKERRQ(ierr);
   ierr = PetscNew(&PetscJobQueue);CHKERRQ(ierr);
 
   tcomm->nkernels = 16;
