@@ -910,8 +910,9 @@ PetscErrorCode PCSetUpOnBlocks_BJacobi_Multiblock(PC pc)
   PetscInt       i,n_local = jac->n_local;
 
   PetscFunctionBegin;
+  printf("Entering PCSetUpOnBlocks_BJacobi_Multiblock\n");
   for (i=0; i<n_local; i++) {
-    ierr = KSPSetUp(jac->ksp[i]);CHKERRQ(ierr);
+    ierr = KSPSetUp(jac->ksp[i]);//CHKERRQ(ierr);
   }
   PetscFunctionReturn(0);
 }
@@ -933,21 +934,22 @@ PetscErrorCode PCApply_BJacobi_Multiblock(PC pc,Vec x,Vec y)
   PetscFunctionBegin;
   ierr = VecGetArrayRead(x,&xin);CHKERRQ(ierr);
   ierr = VecGetArray(y,&yin);CHKERRQ(ierr);
+#pragma omp parallel for
   for (i=0; i<n_local; i++) {
     /*
        To avoid copying the subvector from x into a workspace we instead
        make the workspace vector array point to the subpart of the array of
        the global vector.
     */
-    ierr = VecPlaceArray(bjac->x[i],xin+bjac->starts[i]);CHKERRQ(ierr);
-    ierr = VecPlaceArray(bjac->y[i],yin+bjac->starts[i]);CHKERRQ(ierr);
+    ierr = VecPlaceArray(bjac->x[i],xin+bjac->starts[i]);//CHKERRQ(ierr);
+    ierr = VecPlaceArray(bjac->y[i],yin+bjac->starts[i]);//CHKERRQ(ierr);
 
-    ierr = PetscLogEventBegin(PC_ApplyOnBlocks,jac->ksp[i],bjac->x[i],bjac->y[i],0);CHKERRQ(ierr);
-    ierr = KSPSolve(jac->ksp[i],bjac->x[i],bjac->y[i]);CHKERRQ(ierr);
-    ierr = PetscLogEventEnd(PC_ApplyOnBlocks,jac->ksp[i],bjac->x[i],bjac->y[i],0);CHKERRQ(ierr);
+    ierr = PetscLogEventBegin(PC_ApplyOnBlocks,jac->ksp[i],bjac->x[i],bjac->y[i],0);//CHKERRQ(ierr);
+    ierr = KSPSolve(jac->ksp[i],bjac->x[i],bjac->y[i]);//CHKERRQ(ierr);
+    ierr = PetscLogEventEnd(PC_ApplyOnBlocks,jac->ksp[i],bjac->x[i],bjac->y[i],0);//CHKERRQ(ierr);
 
-    ierr = VecResetArray(bjac->x[i]);CHKERRQ(ierr);
-    ierr = VecResetArray(bjac->y[i]);CHKERRQ(ierr);
+    ierr = VecResetArray(bjac->x[i]);//CHKERRQ(ierr);
+    ierr = VecResetArray(bjac->y[i]);//CHKERRQ(ierr);
   }
   ierr = VecRestoreArrayRead(x,&xin);CHKERRQ(ierr);
   ierr = VecRestoreArray(y,&yin);CHKERRQ(ierr);

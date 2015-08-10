@@ -682,7 +682,7 @@ PetscErrorCode VecMin_Seq(Vec xin,PetscInt *idx,PetscReal *z)
 }
 #endif
 
-#if defined(PETSC_THREADCOMM_ACTIVE)
+#if defined(PETSC_THREADCOMM_ACTIVE_2)
 PetscErrorCode VecSet_kernel(PetscInt thread_id,Vec xin,PetscScalar *alpha_p)
 {
   PetscErrorCode ierr;
