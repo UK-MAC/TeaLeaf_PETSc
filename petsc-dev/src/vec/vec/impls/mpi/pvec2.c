@@ -57,9 +57,14 @@ PetscErrorCode VecNorm_MPI(Vec xin,NormType type,PetscReal *z)
   PetscFunctionBegin;
   ierr = PetscBLASIntCast(n,&bn);CHKERRQ(ierr);
   if (type == NORM_2 || type == NORM_FROBENIUS) {
+#if defined(PETSC_THREADCOMM_ACTIVE)
+    ierr = VecNorm_Seq(xin,type,&work);CHKERRQ(ierr);
+    work = work*work;
+#else
     ierr = VecGetArrayRead(xin,&xx);CHKERRQ(ierr);
     work = PetscRealPart(BLASdot_(&bn,xx,&one,xx,&one));
     ierr = VecRestoreArrayRead(xin,&xx);CHKERRQ(ierr);
+#endif
     ierr = MPI_Allreduce(&work,&sum,1,MPIU_REAL,MPIU_SUM,PetscObjectComm((PetscObject)xin));CHKERRQ(ierr);
     *z   = PetscSqrtReal(sum);
     ierr = PetscLogFlops(2.0*xin->map->n);CHKERRQ(ierr);
