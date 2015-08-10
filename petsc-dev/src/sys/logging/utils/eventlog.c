@@ -648,30 +648,35 @@ PetscErrorCode PetscLogEventBeginDefault(PetscLogEvent event, int t, PetscObject
   PetscErrorCode    ierr;
 
   PetscFunctionBegin;
-  ierr = PetscLogGetStageLog(&stageLog);CHKERRQ(ierr);
-  ierr = PetscStageLogGetCurrent(stageLog, &stage);CHKERRQ(ierr);
-  ierr = PetscStageLogGetEventPerfLog(stageLog, stage, &eventLog);CHKERRQ(ierr);
-  /* Check for double counting */
-  eventLog->eventInfo[event].depth++;
-  if (eventLog->eventInfo[event].depth > 1) PetscFunctionReturn(0);
-  /* Log performance info */
-  eventLog->eventInfo[event].count++;
-  eventLog->eventInfo[event].timeTmp = 0.0;
-  PetscTimeSubtract(&eventLog->eventInfo[event].timeTmp);
-  eventLog->eventInfo[event].flopsTmp = 0.0;
+#pragma omp master
+  {
+    ierr = PetscLogGetStageLog(&stageLog);//CHKERRQ(ierr);
+    ierr = PetscStageLogGetCurrent(stageLog, &stage);//CHKERRQ(ierr);
+    ierr = PetscStageLogGetEventPerfLog(stageLog, stage, &eventLog);//CHKERRQ(ierr);
+    /* Check for double counting */
+    eventLog->eventInfo[event].depth++;
+    if (eventLog->eventInfo[event].depth <= 1)
+    {
+      /* Log performance info */
+      eventLog->eventInfo[event].count++;
+      eventLog->eventInfo[event].timeTmp = 0.0;
+      PetscTimeSubtract(&eventLog->eventInfo[event].timeTmp);
+      eventLog->eventInfo[event].flopsTmp = 0.0;
 #if defined(PETSC_HAVE_PAPI)
-  { long_long values[2];
-    ierr = PAPI_read(PAPIEventSet,values);CHKERRQ(ierr);
+      { long_long values[2];
+        ierr = PAPI_read(PAPIEventSet,values);//CHKERRQ(ierr);
 
-    eventLog->eventInfo[event].flopsTmp -= values[0];
-    /*    printf("fma %g flops %g\n",(double)values[1],(double)values[0]); */
-  }
+        eventLog->eventInfo[event].flopsTmp -= values[0];
+        /*    printf("fma %g flops %g\n",(double)values[1],(double)values[0]); */
+      }
 #else
-  eventLog->eventInfo[event].flopsTmp -= petsc_TotalFlops;
+      eventLog->eventInfo[event].flopsTmp -= petsc_TotalFlops;
 #endif
-  eventLog->eventInfo[event].numMessages   -= petsc_irecv_ct  + petsc_isend_ct  + petsc_recv_ct  + petsc_send_ct;
-  eventLog->eventInfo[event].messageLength -= petsc_irecv_len + petsc_isend_len + petsc_recv_len + petsc_send_len;
-  eventLog->eventInfo[event].numReductions -= petsc_allreduce_ct + petsc_gather_ct + petsc_scatter_ct;
+      eventLog->eventInfo[event].numMessages   -= petsc_irecv_ct  + petsc_isend_ct  + petsc_recv_ct  + petsc_send_ct;
+      eventLog->eventInfo[event].messageLength -= petsc_irecv_len + petsc_isend_len + petsc_recv_len + petsc_send_len;
+      eventLog->eventInfo[event].numReductions -= petsc_allreduce_ct + petsc_gather_ct + petsc_scatter_ct;
+    }
+  }
   PetscFunctionReturn(0);
 }
 
@@ -685,32 +690,38 @@ PetscErrorCode PetscLogEventEndDefault(PetscLogEvent event, int t, PetscObject o
   PetscErrorCode    ierr;
 
   PetscFunctionBegin;
-  ierr = PetscLogGetStageLog(&stageLog);CHKERRQ(ierr);
-  ierr = PetscStageLogGetCurrent(stageLog, &stage);CHKERRQ(ierr);
-  ierr = PetscStageLogGetEventPerfLog(stageLog, stage, &eventLog);CHKERRQ(ierr);
-  /* Check for double counting */
-  eventLog->eventInfo[event].depth--;
-  if (eventLog->eventInfo[event].depth > 0) PetscFunctionReturn(0);
-  else if (eventLog->eventInfo[event].depth < 0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE, "Logging event had unbalanced begin/end pairs");
-  /* Log performance info */
-  PetscTimeAdd(&eventLog->eventInfo[event].timeTmp);
-  eventLog->eventInfo[event].time  += eventLog->eventInfo[event].timeTmp;
-  eventLog->eventInfo[event].time2 += eventLog->eventInfo[event].timeTmp*eventLog->eventInfo[event].timeTmp;
+#pragma omp master
+  {
+    ierr = PetscLogGetStageLog(&stageLog);//CHKERRQ(ierr);
+    ierr = PetscStageLogGetCurrent(stageLog, &stage);//CHKERRQ(ierr);
+    ierr = PetscStageLogGetEventPerfLog(stageLog, stage, &eventLog);//CHKERRQ(ierr);
+    /* Check for double counting */
+    eventLog->eventInfo[event].depth--;
+//    if (eventLog->eventInfo[event].depth > 0) PetscFunctionReturn(0);
+//    else if (eventLog->eventInfo[event].depth < 0) SETERRQ(PETSC_COMM_SELF,PETSC_ERR_ARG_WRONGSTATE, "Logging event had unbalanced begin/end pairs");
+    if (eventLog->eventInfo[event].depth == 0)
+    {
+      /* Log performance info */
+      PetscTimeAdd(&eventLog->eventInfo[event].timeTmp);
+      eventLog->eventInfo[event].time  += eventLog->eventInfo[event].timeTmp;
+      eventLog->eventInfo[event].time2 += eventLog->eventInfo[event].timeTmp*eventLog->eventInfo[event].timeTmp;
 #if defined(PETSC_HAVE_PAPI)
-  { long_long values[2];
-    ierr = PAPI_read(PAPIEventSet,values);CHKERRQ(ierr);
+      { long_long values[2];
+        ierr = PAPI_read(PAPIEventSet,values);//CHKERRQ(ierr);
 
-    eventLog->eventInfo[event].flopsTmp += values[0];
-    /* printf("fma %g flops %g\n",(double)values[1],(double)values[0]); */
-  }
+        eventLog->eventInfo[event].flopsTmp += values[0];
+        /* printf("fma %g flops %g\n",(double)values[1],(double)values[0]); */
+      }
 #else
-  eventLog->eventInfo[event].flopsTmp += petsc_TotalFlops;
+      eventLog->eventInfo[event].flopsTmp += petsc_TotalFlops;
 #endif
-  eventLog->eventInfo[event].flops         += eventLog->eventInfo[event].flopsTmp;
-  eventLog->eventInfo[event].flops2        += eventLog->eventInfo[event].flopsTmp*eventLog->eventInfo[event].flopsTmp;
-  eventLog->eventInfo[event].numMessages   += petsc_irecv_ct  + petsc_isend_ct  + petsc_recv_ct  + petsc_send_ct;
-  eventLog->eventInfo[event].messageLength += petsc_irecv_len + petsc_isend_len + petsc_recv_len + petsc_send_len;
-  eventLog->eventInfo[event].numReductions += petsc_allreduce_ct + petsc_gather_ct + petsc_scatter_ct;
+      eventLog->eventInfo[event].flops         += eventLog->eventInfo[event].flopsTmp;
+      eventLog->eventInfo[event].flops2        += eventLog->eventInfo[event].flopsTmp*eventLog->eventInfo[event].flopsTmp;
+      eventLog->eventInfo[event].numMessages   += petsc_irecv_ct  + petsc_isend_ct  + petsc_recv_ct  + petsc_send_ct;
+      eventLog->eventInfo[event].messageLength += petsc_irecv_len + petsc_isend_len + petsc_recv_len + petsc_send_len;
+      eventLog->eventInfo[event].numReductions += petsc_allreduce_ct + petsc_gather_ct + petsc_scatter_ct;
+    }
+  }
   PetscFunctionReturn(0);
 }
 
