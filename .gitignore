@@ -5,3 +5,8 @@ tea_leaf
 tea.out
 tea.in.tmp
 tea.visit
+tea_bm_short.o*
+tea_leaf.*.xml
+runtealeaf*.pbs
+parse*.bash
+.project
