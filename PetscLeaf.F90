@@ -26,6 +26,11 @@ MODULE PETScTeaLeaf
   Vec :: RHSLoc
   DM  :: petscDA
 
+  Mat :: ZT
+  Mat :: Z
+  Mat :: E
+  DM  :: petscDAcoarse
+
 CONTAINS
 
 SUBROUTINE setup_petsc(eps,max_iters)
@@ -38,6 +43,10 @@ SUBROUTINE setup_petsc(eps,max_iters)
   REAL(kind=8) :: eps
   INTEGER :: max_iters
 
+  PetscInt :: refine_x=3,refine_y=3,refine_z=1
+  PetscViewer :: viewer
+  PetscReal :: fill=1.0
+
   CALL PetscInitialize(PETSC_NULL_CHARACTER,perr)
 
   ! px, py set in tea_decompose to be chunks_x and chunks_y
@@ -46,11 +55,29 @@ SUBROUTINE setup_petsc(eps,max_iters)
   CALL DMDACreate2D(PETSC_COMM_WORLD,                      &
                     DM_BOUNDARY_NONE,DM_BOUNDARY_NONE,     &
                     DMDA_STENCIL_STAR,                     &
-                    grid%x_cells,grid%y_cells,             &
+                    grid%x_cells,                          &
+                    grid%y_cells,                          &
                     px,py,                                 &
                     1,1,                                   &
-                    lx(1:px),ly(1:py),                     &
+                    lx(1:px),                              &
+                    ly(1:py),                              &
                     petscDA,perr)
+  CALL DMDASetRefinementFactor(petscDA,                    &
+                               refine_x,                   &
+                               refine_y,                   &
+                               refine_z,                   &
+                               perr)
+  CALL DMSetFromOptions(petscDA,perr) ! need this to force the coarsening factors to be set from the refinement factors
+  CALL DMCoarsen(petscDA,PETSC_COMM_WORLD,petscDAcoarse,perr)
+  CALL DMCreateAggregates(petscDAcoarse,petscDA,ZT,perr)
+  CALL MatTranspose(ZT,MAT_INITIAL_MATRIX,Z,perr)
+  !CALL PetscViewerCreate(PETSC_COMM_WORLD,viewer,perr)
+  !CALL PetscViewerSetType(viewer,PETSCVIEWERASCII,perr)
+  !CALL DMView(petscDAcoarse,viewer,perr)
+  !CALL DMView(petscDAcoarse,viewer,perr)
+  !CALL PetscViewerDestroy(viewer,perr)
+  !call DMDAGetRefinementFactor(petscDA, refine_x, refine_y, refine_z, perr)
+  !write(6,*) refine_x, refine_y, refine_z
 
   ! Setup the KSP Solver
   CALL KSPCreate(MPI_COMM_WORLD,kspObj,perr)
@@ -75,6 +102,9 @@ SUBROUTINE setup_petsc(eps,max_iters)
   ENDIF
 
   CALL DMCreateMatrix(petscDA,A,perr)
+
+  ! Setup the initial coarse space matrix E
+  CALL MatPtAP(A,Z,MAT_INITIAL_MATRIX,fill,E,perr)
 
   ! Setup the initial solution vector
   CALL DMCreateGlobalVector(petscDA,X,perr)
@@ -237,6 +267,7 @@ SUBROUTINE setupMatA_petsc(c,rx,ry)
   MatStencil  :: row(4,1)       ! 4 x Number of stencils in entry (adding 1 at a time for now, so 1)
   MatStencil  :: column(4,5)    ! 4 x Stencil Size: (i,j,k,m) * stencil Size (5 point stencil)
   PetscScalar :: stencil(5)     ! 4 x Stencil Size: (i,j,k,m) * stencil Size (5 point stencil)
+  PetscReal   :: fill=1.0
 
   left = chunks(c)%field%left
   right = chunks(c)%field%right
@@ -333,6 +364,9 @@ SUBROUTINE setupMatA_petsc(c,rx,ry)
 
   CALL MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY,perr)
   CALL MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY,perr)
+
+  ! Recompute the coarse space matrix E from A
+  CALL MatPtAP(A,Z,MAT_REUSE_MATRIX,fill,E,perr)
 
 END SUBROUTINE setupMatA_petsc
 
