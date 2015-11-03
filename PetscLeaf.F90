@@ -17,6 +17,8 @@ MODULE PETScTeaLeaf
   INTEGER :: perr
   INTEGER :: mpisize
 
+  PetscInt,parameter :: nlevels=3
+
   KSP :: kspObj
   Vec :: Sol
   Vec :: X
@@ -24,12 +26,12 @@ MODULE PETScTeaLeaf
   Mat :: A
   Vec :: XLoc
   Vec :: RHSLoc
-  DM  :: petscDA
+  DM  :: petscDA(nlevels)
 
   Mat :: ZT
+  Mat :: ZTA
   Mat :: Z
   Mat :: E
-  DM  :: petscDAcoarse
 
 CONTAINS
 
@@ -42,16 +44,29 @@ SUBROUTINE setup_petsc(eps,max_iters)
   INTEGER :: c,cx,cy
   REAL(kind=8) :: eps
   INTEGER :: max_iters
+  INTEGER :: lev
 
   PetscInt :: refine_x=3,refine_y=3,refine_z=1
   PetscViewer :: viewer
-  PetscReal :: fill=1.0
+  PetscReal :: ztafill=5.0,efill=1.0
 
   CALL PetscInitialize(PETSC_NULL_CHARACTER,perr)
 
   ! px, py set in tea_decompose to be chunks_x and chunks_y
   ! clover_decompose MUST be called first
 
+#if PETSC_VER == 342
+  CALL DMDACreate2D(PETSC_COMM_WORLD,                      &
+                    DMDA_BOUNDARY_NONE,DMDA_BOUNDARY_NONE, &
+                    DMDA_STENCIL_STAR,                     &
+                    grid%x_cells,                          &
+                    grid%y_cells,                          &
+                    px,py,                                 &
+                    1,1,                                   &
+                    lx(1:px),                              &
+                    ly(1:py),                              &
+                    petscDA(1),perr)
+#else
   CALL DMDACreate2D(PETSC_COMM_WORLD,                      &
                     DM_BOUNDARY_NONE,DM_BOUNDARY_NONE,     &
                     DMDA_STENCIL_STAR,                     &
@@ -61,27 +76,37 @@ SUBROUTINE setup_petsc(eps,max_iters)
                     1,1,                                   &
                     lx(1:px),                              &
                     ly(1:py),                              &
-                    petscDA,perr)
-  CALL DMDASetRefinementFactor(petscDA,                    &
-                               refine_x,                   &
-                               refine_y,                   &
-                               refine_z,                   &
-                               perr)
-  CALL DMSetFromOptions(petscDA,perr) ! need this to force the coarsening factors to be set from the refinement factors
-  CALL DMCoarsen(petscDA,PETSC_COMM_WORLD,petscDAcoarse,perr)
-  CALL DMCreateAggregates(petscDAcoarse,petscDA,ZT,perr)
+                    petscDA(1),perr)
+#endif
+  DO lev=2,nlevels
+    CALL DMDASetRefinementFactor(petscDA(lev-1),             &
+                                 refine_x,                   &
+                                 refine_y,                   &
+                                 refine_z,                   &
+                                 perr)
+    CALL DMSetFromOptions(petscDA(lev-1),perr) ! need this to force the coarsening factors to be set from the refinement factors
+    CALL DMCoarsen(petscDA(lev-1),PETSC_COMM_WORLD,petscDA(lev),perr)
+  ENDDO
+  ! We would like to have called the following function but the fortran interface appears to be broken
+  !CALL DMCoarsenHierarchy(petscDA(1),nlevels,petscDA(2),perr)
+  CALL DMCreateAggregates(petscDA(2),petscDA(1),ZT,perr)
   CALL MatTranspose(ZT,MAT_INITIAL_MATRIX,Z,perr)
+
   !CALL PetscViewerCreate(PETSC_COMM_WORLD,viewer,perr)
   !CALL PetscViewerSetType(viewer,PETSCVIEWERASCII,perr)
-  !CALL DMView(petscDAcoarse,viewer,perr)
-  !CALL DMView(petscDAcoarse,viewer,perr)
+  !CALL DMView(petscDA(2),viewer,perr)
+  !CALL DMView(petscDA(2),viewer,perr)
   !CALL PetscViewerDestroy(viewer,perr)
-  !call DMDAGetRefinementFactor(petscDA, refine_x, refine_y, refine_z, perr)
+  !call DMDAGetRefinementFactor(petscDA(1), refine_x, refine_y, refine_z, perr)
   !write(6,*) refine_x, refine_y, refine_z
 
   ! Setup the KSP Solver
   CALL KSPCreate(MPI_COMM_WORLD,kspObj,perr)
+#if PETSC_VER == 342
+  CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
+#else
   CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_REAL,PETSC_DEFAULT_REAL,max_iters,perr)
+#endif
 
   CALL KSPSetCheckNormIteration(kspObj,-1,perr)
   CALL KSPSetFromOptions(kspObj,perr)
@@ -96,27 +121,31 @@ SUBROUTINE setup_petsc(eps,max_iters)
   CALL MPI_Comm_Size(MPI_COMM_WORLD,mpisize,perr)
 
   IF(mpisize .EQ. 1) THEN
-    CALL DMSetMatType(petscDA,'seqaij',perr)
+    CALL DMSetMatType(petscDA(1),'seqaij',perr)
   ELSE
-    CALL DMSetMatType(petscDA,'mpiaij',perr)
+    CALL DMSetMatType(petscDA(1),'mpiaij',perr)
   ENDIF
 
-  CALL DMCreateMatrix(petscDA,A,perr)
+  CALL DMCreateMatrix(petscDA(1),A,perr)
+
+  ! add (AZ)^T=Z^T A matrix - don't compute the entries just the sparsity pattern
+  ! using -mat_view at this stage will cause a segmentation fault
+  CALL MatMatMultSymbolic(ZT,A,ztafill,ZTA,perr)
 
   ! Setup the initial coarse space matrix E
-  CALL MatPtAP(A,Z,MAT_INITIAL_MATRIX,fill,E,perr)
+  CALL MatPtAP(A,Z,MAT_INITIAL_MATRIX,efill,E,perr)
 
   ! Setup the initial solution vector
-  CALL DMCreateGlobalVector(petscDA,X,perr)
+  CALL DMCreateGlobalVector(petscDA(1),X,perr)
 
   ! Duplicate Vector to setup B
-  CALL DMCreateGlobalVector(petscDA,B,perr)
+  CALL DMCreateGlobalVector(petscDA(1),B,perr)
 
   ! Local Vector for RHS Vector
-  CALL DMCreateLocalVector(petscDA,RHSLoc,perr)
+  CALL DMCreateLocalVector(petscDA(1),RHSLoc,perr)
 
   ! Local Vector for X Vector
-  CALL DMCreateLocalVector(petscDA,XLoc,perr)
+  CALL DMCreateLocalVector(petscDA(1),XLoc,perr)
 
   total_cg_iter = 0
   total_cheby_iter = 0
@@ -164,7 +193,7 @@ SUBROUTINE setupSol_petsc(c,rx,ry)
 
     CALL VecZeroEntries(X,perr)
 
-    CALL DMDAVecGetArrayF90(petscDA,X,xv,perr)
+    CALL DMDAVecGetArrayF90(petscDA(1),X,xv,perr)
 
     DO j = bottom, top
       DO i = left, right
@@ -172,7 +201,7 @@ SUBROUTINE setupSol_petsc(c,rx,ry)
       ENDDO
     ENDDO
 
-    CALL DMDAVecRestoreArrayF90(petscDA,X,xv,perr)
+    CALL DMDAVecRestoreArrayF90(petscDA(1),X,xv,perr)
 
 END SUBROUTINE setupSol_petsc
 
@@ -206,7 +235,7 @@ SUBROUTINE setupRHS_petsc(c,rx,ry)
 
     CALL VecZeroEntries(B,perr)
 
-    CALL DMDAVecGetArrayF90(petscDA,B,bv,perr)
+    CALL DMDAVecGetArrayF90(petscDA(1),B,bv,perr)
 
     DO j = bottom, top
       DO i = left, right
@@ -221,7 +250,7 @@ SUBROUTINE setupRHS_petsc(c,rx,ry)
       ENDDO
     ENDDO
 
-    CALL DMDAVecRestoreArrayF90(petscDA,B,bv,perr)
+    CALL DMDAVecRestoreArrayF90(petscDA(1),B,bv,perr)
 
 END SUBROUTINE setupRHS_petsc
 
@@ -241,7 +270,7 @@ SUBROUTINE getSolution_petsc(c)
     top = chunks(c)%field%top
     bottom = chunks(c)%field%bottom
 
-    CALL DMDAVecGetArrayF90(petscDA,X,xv,perr)
+    CALL DMDAVecGetArrayF90(petscDA(1),X,xv,perr)
 
     DO j = bottom, top
       DO i = left, right
@@ -249,11 +278,13 @@ SUBROUTINE getSolution_petsc(c)
       ENDDO
     ENDDO
 
-    CALL DMDAVecRestoreArrayF90(petscDA,X,xv,perr)
+    CALL DMDAVecRestoreArrayF90(petscDA(1),X,xv,perr)
 
 END SUBROUTINE getSolution_petsc
 
 SUBROUTINE setupMatA_petsc(c,rx,ry)
+
+#include "finclude/petscsys.h"
 
   INTEGER       :: c                                ! What chunk are we solving
   INTEGER       :: left,right,top,bottom
@@ -267,7 +298,9 @@ SUBROUTINE setupMatA_petsc(c,rx,ry)
   MatStencil  :: row(4,1)       ! 4 x Number of stencils in entry (adding 1 at a time for now, so 1)
   MatStencil  :: column(4,5)    ! 4 x Stencil Size: (i,j,k,m) * stencil Size (5 point stencil)
   PetscScalar :: stencil(5)     ! 4 x Stencil Size: (i,j,k,m) * stencil Size (5 point stencil)
-  PetscReal   :: fill=1.0
+  PetscReal   :: ztafill=5.0,efill=1.0
+
+  PetscViewer :: viewer
 
   left = chunks(c)%field%left
   right = chunks(c)%field%right
@@ -365,8 +398,15 @@ SUBROUTINE setupMatA_petsc(c,rx,ry)
   CALL MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY,perr)
   CALL MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY,perr)
 
+  ! Recompute the (AZ)^T=Z^T A matrix
+  CALL MatMatMult(ZT,A,MAT_REUSE_MATRIX,ztafill,ZTA,perr)
+  !CALL PetscViewerCreate(PETSC_COMM_WORLD,viewer,perr)
+  !CALL PetscViewerSetType(viewer,PETSCVIEWERASCII,perr)
+  !CALL MatView(ZTA,viewer,perr)
+  !CALL PetscViewerDestroy(viewer,perr)
+
   ! Recompute the coarse space matrix E from A
-  CALL MatPtAP(A,Z,MAT_REUSE_MATRIX,fill,E,perr)
+  CALL MatPtAP(A,Z,MAT_REUSE_MATRIX,efill,E,perr)
 
 END SUBROUTINE setupMatA_petsc
 
@@ -454,7 +494,11 @@ SUBROUTINE solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)
     CALL PCSetType(tPC,PCBJACOBI,perr)
 
     CALL KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
+#if PETSC_VER == 342
+    CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,pgcg_cg_iter,perr)
+#else
     CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_REAL,PETSC_DEFAULT_REAL,pgcg_cg_iter,perr)
+#endif
     CALL KSPSetInitialGuessNonzero(kspObj,PETSC_FALSE,perr)
 
     CALL KSPSolve(kspObj,B,X,perr)
@@ -487,7 +531,11 @@ SUBROUTINE solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)
 
       CALL KSPSetInitialGuessNonzero(kspObj,PETSC_TRUE,perr)    ! Disable zeroing of results vector (reuse for residual)
       CALL KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
+#if PETSC_VER == 342
+      CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
+#else
       CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_REAL,PETSC_DEFAULT_REAL,max_iters,perr)
+#endif
       CALL KSPChebyshevSetEigenValues(kspObj,emax,emin,perr)
 
       CALL KSPSolve(kspObj,B,X,perr)
