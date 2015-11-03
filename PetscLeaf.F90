@@ -493,7 +493,7 @@ SUBROUTINE solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)
     CALL KSPGetPC(kspObj,tPC,perr)
     CALL PCSetType(tPC,PCBJACOBI,perr)
 
-    CALL KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
+    CALL KSPSetOperators(kspObj,A,A,perr)
 #if PETSC_VER == 342
     CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,pgcg_cg_iter,perr)
 #else
@@ -530,7 +530,7 @@ SUBROUTINE solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)
       CALL PCSetType(tPC,PCBJACOBI,perr)
 
       CALL KSPSetInitialGuessNonzero(kspObj,PETSC_TRUE,perr)    ! Disable zeroing of results vector (reuse for residual)
-      CALL KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
+      CALL KSPSetOperators(kspObj,A,A,perr)
 #if PETSC_VER == 342
       CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
 #else
