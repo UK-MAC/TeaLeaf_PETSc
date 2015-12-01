@@ -17,23 +17,36 @@ MODULE PETScTeaLeaf
   INTEGER :: perr
   INTEGER :: mpisize
 
-  PetscInt,parameter :: nlevels=3
+  ! The maximum number of multigrid levels
+  ! It will automatically stop when it coarsens
+  ! down to 1 global cell
+  PetscInt,parameter :: max_nlevels=10
 
   KSP :: kspObj
+  PC  :: pcObj
   Vec :: Sol
   Vec :: X
   Vec :: B
   Mat :: A
   Vec :: XLoc
   Vec :: RHSLoc
-  DM  :: petscDA(nlevels)
-
-  Mat :: ZT
-  Mat :: ZTA
-  Mat :: Z
-  Mat :: E
+  
+  ! The DMs representing each coarse grid
+  DM  :: petscDA(max_nlevels)
+  ! The restrictors are stored in this structure
+  Mat :: ZT(max_nlevels)
+  ! The prolongators are stored in this structure
+  Mat :: ZTA(max_nlevels)
+  ! We're not currently using this
+  ! PETSc is creating the prolongators
+  Mat :: Z(max_nlevels)
+  ! We're not currently using this
+  ! PETSc is creating the coarse space matrices
+  Mat :: E(max_nlevels)
 
 CONTAINS
+
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 SUBROUTINE setup_petsc(eps,max_iters)
 
@@ -41,19 +54,26 @@ SUBROUTINE setup_petsc(eps,max_iters)
 
 #include "finclude/petscsys.h"
 
+   ! ~~~~~~~~~~~~~
+
   INTEGER :: c,cx,cy
   REAL(kind=8) :: eps
-  INTEGER :: max_iters
-  INTEGER :: lev
+  INTEGER :: max_iters, nlevels
+  INTEGER :: our_level, petsc_level
 
-  PetscInt :: refine_x=3,refine_y=3,refine_z=1
+  PetscInt :: refine_x=2,refine_y=2,refine_z=1 
+  PetscInt :: x_cells_coarse, y_cells_coarse, z_cells_coarse
   PetscViewer :: viewer
   PetscReal :: ztafill=5.0,efill=1.0
+  
+  ! ~~~~~~~~~~~~~
 
+  ! Initialise PETSc
   CALL PetscInitialize(PETSC_NULL_CHARACTER,perr)
-
-  ! px, py set in tea_decompose to be chunks_x and chunks_y
-  ! clover_decompose MUST be called first
+  
+  ! ~~~~~~~~~~~~~
+  ! Create a PETSc DM object to represent the structured grid
+  ! ~~~~~~~~~~~~~
 
 #if PETSC_VER == 342
   CALL DMDACreate2D(PETSC_COMM_WORLD,                      &
@@ -78,29 +98,101 @@ SUBROUTINE setup_petsc(eps,max_iters)
                     ly(1:py),                              &
                     petscDA(1),perr)
 #endif
-  DO lev=2,nlevels
-    CALL DMDASetRefinementFactor(petscDA(lev-1),             &
+
+  ! ~~~~~~~~~~~~~   
+  ! Use the DM coarsen to create the coarse grids 
+  ! ~~~~~~~~~~~~~
+   
+  ! ~~~~~~~~~~~~~
+  ! Note we are going to introduce two different ways of 
+  ! numbering the multigrid levels
+  ! our_level and petsc_level
+  ! This may seem ridiculous but is done deliberately 
+  ! in order to abstract away from the internal petsc level
+  ! numbering for when we want to start doing our own nested cycles
+  ! that may not fit into standard PETSc cycles
+  ! 
+  ! PETSc MG levels work in the opposite order to those in our code. If there are N levels:
+  !           PETSc   our_level
+  ! Fine     N - 1      1
+  !          N - 2      2
+  !            .        .
+  !            1      N - 1
+  ! Coarse     0        N
+    
+  ! Therefore  ---  petsc_level = N - our_level  
+  ! ~~~~~~~~~~~~~   
+
+  ! Loop over the levels and coarsen the DM 
+  level_loop_1: DO our_level = 2, max_nlevels
+   
+    CALL DMDASetRefinementFactor(petscDA(our_level-1),             &
                                  refine_x,                   &
                                  refine_y,                   &
                                  refine_z,                   &
                                  perr)
-    CALL DMSetFromOptions(petscDA(lev-1),perr) ! need this to force the coarsening factors to be set from the refinement factors
-    CALL DMCoarsen(petscDA(lev-1),PETSC_COMM_WORLD,petscDA(lev),perr)
+                                 
+    ! need this to force the coarsening factors to be set from the refinement factors                                 
+    CALL DMSetFromOptions(petscDA(our_level-1),perr) 
+    CALL DMCoarsen(petscDA(our_level-1),PETSC_COMM_WORLD,petscDA(our_level),perr)
+    
+    ! Get the number of cells in x, y and z on the coarse level
+    call DMDAGetInfo(petscDA(our_level), &
+                     PETSC_NULL_INTEGER, &
+                     x_cells_coarse, &
+                     y_cells_coarse, &
+                     z_cells_coarse, &
+                     PETSC_NULL_INTEGER, &
+                     PETSC_NULL_INTEGER, &
+                     PETSC_NULL_INTEGER, &
+                     PETSC_NULL_INTEGER, &
+                     PETSC_NULL_INTEGER, &
+                     PETSC_NULL_INTEGER, &
+                     PETSC_NULL_INTEGER, &
+                     PETSC_NULL_INTEGER, &
+                     PETSC_NULL_INTEGER, &
+                     PETSC_NULL_INTEGER, &
+                     perr)
+                     
+    ! If we have coarsened to a grid with global dimension 1
+    ! in any direction, stop
+    if (x_cells_coarse == 1 .OR. &
+        y_cells_coarse == 1) then
+        
+      ! nlevels is now the maximum number of levels we have
+      ! including the top grid
+      nlevels = our_level
+      exit level_loop_1
+        
+    ! Otherwise use all levels
+    else if (our_level == max_nlevels) then
+      nlevels = max_nlevels        
+    end if
+       
+  ENDDO level_loop_1 
+  
+  ! ~~~~~~~~~~~~~   
+  ! Build the restrictor on each level
+  ! ~~~~~~~~~~~~~
+  
+  ! Loop over the levels
+  DO our_level=2, nlevels
+    
+    ! Create the restrictor going from our_level to our_level-1
+    CALL DMCreateAggregates(petscDA(our_level), petscDA(our_level - 1), ZT(our_level - 1), perr)
+    
+    ! Explicltly go and create the prolongator by transposing
+    ! For some reason PETSc isn't letting us just call PCMGSetInterpolation and give
+    ! it the restrictor, the doc says it is clever enough to work out whether you are 
+    ! passing in the restrictor or prolongator
+    call MatTranspose(ZT(our_level - 1), MAT_INITIAL_MATRIX, Z(our_level - 1), perr)
+      
   ENDDO
-  ! We would like to have called the following function but the fortran interface appears to be broken
-  !CALL DMCoarsenHierarchy(petscDA(1),nlevels,petscDA(2),perr)
-  CALL DMCreateAggregates(petscDA(2),petscDA(1),ZT,perr)
-  CALL MatTranspose(ZT,MAT_INITIAL_MATRIX,Z,perr)
-
-  !CALL PetscViewerCreate(PETSC_COMM_WORLD,viewer,perr)
-  !CALL PetscViewerSetType(viewer,PETSCVIEWERASCII,perr)
-  !CALL DMView(petscDA(2),viewer,perr)
-  !CALL DMView(petscDA(2),viewer,perr)
-  !CALL PetscViewerDestroy(viewer,perr)
-  !call DMDAGetRefinementFactor(petscDA(1), refine_x, refine_y, refine_z, perr)
-  !write(6,*) refine_x, refine_y, refine_z
-
+  
+  ! ~~~~~~~~~~~~~   
   ! Setup the KSP Solver
+  ! ~~~~~~~~~~~~~  
+
   CALL KSPCreate(MPI_COMM_WORLD,kspObj,perr)
 #if PETSC_VER == 342
   CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
@@ -116,7 +208,47 @@ SUBROUTINE setup_petsc(eps,max_iters)
     WRITE(g_out,*)'PETSc Setup:'
     WRITE(g_out,*)'Absolute Tolerance set to', eps
     WRITE(g_out,*)'max_iters set to', max_iters
-  ENDIF
+  ENDIF  
+  
+  ! ~~~~~~~~~~~~~   
+  ! Setup the PC for the ksp
+  ! ~~~~~~~~~~~~~    
+  call PCCreate(MPI_COMM_WORLD, pcObj, perr)
+  
+  ! Set the PC type to MG
+  call PCSetType(pcObj, PCMG, perr)
+  
+  ! Set the number of levels for the MG
+  ! You must do this before calling any other PETSc 
+  ! multigrid routines
+  call PCMGSetLevels(pcObj, nlevels, PETSC_NULL_OBJECT, perr)
+  
+  ! Tell PETSc to use a Galerkin projection to form the 
+  ! coarse space matrices
+  call PCMGSetGalerkin(pcObj, .TRUE., perr)
+
+  ! Loop over the levels
+  ! from the second grid to the coarsest grid 
+  do our_level = 1, nlevels-1
+    
+    ! Get our_level numbering
+    petsc_level = nlevels - our_level
+            
+    ! Set the prolongator
+    ! We don't have to bother setting the restrictor as PETSc
+    ! will just take the transpose
+    call PCMGSetInterpolation(pcObj, petsc_level, Z(our_level), perr)
+        
+  end do
+  
+  ! Set the PC to the KSP
+  call KSPSetPC(kspObj, pcObj, perr)
+  
+  ! ~~~~~~~~~~~~~   
+  ! Create the sparsity of the A matrix
+  ! and preallocate
+  ! setupMatA_petsc actually sets the values
+  ! ~~~~~~~~~~~~~    
 
   CALL MPI_Comm_Size(MPI_COMM_WORLD,mpisize,perr)
 
@@ -127,13 +259,11 @@ SUBROUTINE setup_petsc(eps,max_iters)
   ENDIF
 
   CALL DMCreateMatrix(petscDA(1),A,perr)
-
-  ! add (AZ)^T=Z^T A matrix - don't compute the entries just the sparsity pattern
-  ! using -mat_view at this stage will cause a segmentation fault
-  CALL MatMatMultSymbolic(ZT,A,ztafill,ZTA,perr)
-
-  ! Setup the initial coarse space matrix E
-  CALL MatPtAP(A,Z,MAT_INITIAL_MATRIX,efill,E,perr)
+  
+  ! ~~~~~~~~~~~~~   
+  ! Create the vectors we need (sol and RHS) from 
+  ! the DM on the top grid
+  ! ~~~~~~~~~~~~~    
 
   ! Setup the initial solution vector
   CALL DMCreateGlobalVector(petscDA(1),X,perr)
@@ -146,12 +276,16 @@ SUBROUTINE setup_petsc(eps,max_iters)
 
   ! Local Vector for X Vector
   CALL DMCreateLocalVector(petscDA(1),XLoc,perr)
+  
+  ! ~~~~~~~~~~~~~  
 
   total_cg_iter = 0
   total_cheby_iter = 0
   total_petsc_iter = 0
 
 END SUBROUTINE setup_petsc
+
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 SUBROUTINE cleanup_petsc()
 
@@ -160,6 +294,8 @@ SUBROUTINE cleanup_petsc()
   CALL PetscFinalize(perr)
 
 END SUBROUTINE cleanup_petsc
+
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 SUBROUTINE setupSol_petsc(c,rx,ry)
 
@@ -204,6 +340,8 @@ SUBROUTINE setupSol_petsc(c,rx,ry)
     CALL DMDAVecRestoreArrayF90(petscDA(1),X,xv,perr)
 
 END SUBROUTINE setupSol_petsc
+
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 SUBROUTINE setupRHS_petsc(c,rx,ry)
 
@@ -254,6 +392,8 @@ SUBROUTINE setupRHS_petsc(c,rx,ry)
 
 END SUBROUTINE setupRHS_petsc
 
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 SUBROUTINE getSolution_petsc(c)
 
     INTEGER :: i,j,ilen,rowloc
@@ -281,6 +421,8 @@ SUBROUTINE getSolution_petsc(c)
     CALL DMDAVecRestoreArrayF90(petscDA(1),X,xv,perr)
 
 END SUBROUTINE getSolution_petsc
+
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 SUBROUTINE setupMatA_petsc(c,rx,ry)
 
@@ -398,17 +540,9 @@ SUBROUTINE setupMatA_petsc(c,rx,ry)
   CALL MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY,perr)
   CALL MatAssemblyEnd(A,MAT_FINAL_ASSEMBLY,perr)
 
-  ! Recompute the (AZ)^T=Z^T A matrix
-  CALL MatMatMult(ZT,A,MAT_REUSE_MATRIX,ztafill,ZTA,perr)
-  !CALL PetscViewerCreate(PETSC_COMM_WORLD,viewer,perr)
-  !CALL PetscViewerSetType(viewer,PETSCVIEWERASCII,perr)
-  !CALL MatView(ZTA,viewer,perr)
-  !CALL PetscViewerDestroy(viewer,perr)
-
-  ! Recompute the coarse space matrix E from A
-  CALL MatPtAP(A,Z,MAT_REUSE_MATRIX,efill,E,perr)
-
 END SUBROUTINE setupMatA_petsc
+
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 SUBROUTINE solve_petsc(numit,error)
 
@@ -459,6 +593,8 @@ SUBROUTINE solve_petsc(numit,error)
     total_petsc_iter = total_petsc_iter + numit
 
 END SUBROUTINE solve_petsc
+
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ! Apply Paul Garrett Approach
 ! (1) Use CG to Execute 10 iteration, retrieve eigenvalues
@@ -578,6 +714,8 @@ SUBROUTINE solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)
 
 END SUBROUTINE solve_petsc_pgcg
 
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 SUBROUTINE printXVec(fileName)
 
     USE MPI
@@ -600,6 +738,8 @@ SUBROUTINE printXVec(fileName)
 
 END SUBROUTINE printXVec
 
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 SUBROUTINE printBVec(fileName)
 
     USE MPI
@@ -621,6 +761,8 @@ SUBROUTINE printBVec(fileName)
 
 END SUBROUTINE printBVec
 
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 SUBROUTINE printMatA(fileName)
 
     USE MPI
@@ -641,5 +783,7 @@ SUBROUTINE printMatA(fileName)
     CALL PetscViewerDestroy(viewer,perr)
 
 END SUBROUTINE printMatA
+
+! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 END MODULE PETScTeaLeaf
