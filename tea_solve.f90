@@ -529,6 +529,13 @@ SUBROUTINE tea_leaf()
    
         CALL getSolution_petsc(1)
 
+        fields=0
+        fields(FIELD_U) = 1
+        IF (profiler_on) halo_time = timer()
+        ! update u
+        CALL update_halo(fields,1)
+        IF (profiler_on) profiler%halo_exchange = profiler%halo_exchange + (timer() - halo_time)
+        IF (profiler_on) solve_time = solve_time + (timer()-halo_time)
       ENDIF
 
       IF (tl_check_result) THEN
