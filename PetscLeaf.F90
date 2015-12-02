@@ -240,7 +240,10 @@ SUBROUTINE setup_petsc(eps,max_iters)
     call PCMGSetInterpolation(pcObj, petsc_level, Z(our_level), perr)
         
   end do
-  
+
+  ! Enable the user to set options for the PC from the command line
+  CALL PCSetFromOptions(pcObj,perr) 
+
   ! Set the PC to the KSP
   call KSPSetPC(kspObj, pcObj, perr)
   
