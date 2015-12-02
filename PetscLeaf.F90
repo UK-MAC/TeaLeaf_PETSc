@@ -154,10 +154,10 @@ SUBROUTINE setup_petsc(eps,max_iters)
                      PETSC_NULL_INTEGER, &
                      perr)
                      
-    ! If we have coarsened to a grid with global dimension 1
+    ! If we have coarsened to a grid with local dimension 1
     ! in any direction, stop
-    if (x_cells_coarse == 1 .OR. &
-        y_cells_coarse == 1) then
+    if (x_cells_coarse == px .OR. &
+        y_cells_coarse == py) then
         
       ! nlevels is now the maximum number of levels we have
       ! including the top grid
