@@ -93,7 +93,6 @@ SUBROUTINE tea_leaf()
     ELSE WHERE
       zero_boundary = .FALSE.
     END WHERE
-    write(6,*) c,zero_boundary
 
     IF(chunks(c)%task.EQ.parallel%task) THEN
 
