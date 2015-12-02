@@ -480,6 +480,7 @@ SUBROUTINE setupMatA_petsc(c,rx,ry)
         c4 = (-1*ry) * chunks(c)%field%Vector_Ky(i,j)
         c5 = (-1*ry) * chunks(c)%field%Vector_Ky(i,j+1)
 
+        ! Applying reflective boundary conditions independent of the Ky and Ky values - potential source of inconsistency
         IF(i_g == 1) THEN ! Global X Low Boundary
           c2=0
         ENDIF

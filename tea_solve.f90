@@ -57,6 +57,9 @@ SUBROUTINE tea_leaf()
   LOGICAL :: ch_switch_check
   LOGICAL, SAVE :: first=.TRUE.
 
+  LOGICAL, PARAMETER :: reflective_boundary=.TRUE. ! Run the problem with reflective boundaries (PETSc has to do this)
+  LOGICAL, DIMENSION(4) :: zero_boundary
+
   INTEGER :: cg_calc_steps
 
   REAL(KIND=8) :: cg_time, ch_time, total_solve_time, ch_per_it, cg_per_it, iteration_time
@@ -85,6 +88,13 @@ SUBROUTINE tea_leaf()
 
   DO c=1,chunks_per_task
 
+    WHERE (chunks(c)%chunk_neighbours .EQ. EXTERNAL_FACE)
+      zero_boundary = .TRUE.
+    ELSE WHERE
+      zero_boundary = .FALSE.
+    END WHERE
+    write(6,*) c,zero_boundary
+
     IF(chunks(c)%task.EQ.parallel%task) THEN
 
       ! INIT
@@ -110,6 +120,8 @@ SUBROUTINE tea_leaf()
               chunks(c)%field%x_max,                                  &
               chunks(c)%field%y_min,                                  &
               chunks(c)%field%y_max,                                  &
+              zero_boundary,                                          &
+              reflective_boundary,                                    &
               chunks(c)%field%density,                                &
               chunks(c)%field%energy1,                                &
               chunks(c)%field%u,                                      &
@@ -149,6 +161,8 @@ SUBROUTINE tea_leaf()
               chunks(c)%field%x_max,                       &
               chunks(c)%field%y_min,                       &
               chunks(c)%field%y_max,                       &
+              zero_boundary,                               &
+              reflective_boundary,                         &
               chunks(c)%field%celldx,                      &
               chunks(c)%field%celldy,                      &
               chunks(c)%field%volume,                      &

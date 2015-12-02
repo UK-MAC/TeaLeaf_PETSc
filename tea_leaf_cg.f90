@@ -29,6 +29,8 @@ SUBROUTINE tea_leaf_kernel_init_cg_fortran(x_min,  &
                            x_max,                  &
                            y_min,                  &
                            y_max,                  &
+                           zero_boundary,          &
+                           reflective_boundary,    &
                            density,                &
                            energy,                 &
                            u,                      &
@@ -48,6 +50,8 @@ SUBROUTINE tea_leaf_kernel_init_cg_fortran(x_min,  &
   IMPLICIT NONE
 
   LOGICAL :: preconditioner_on
+  LOGICAL :: reflective_boundary
+  LOGICAL, DIMENSION(4) :: zero_boundary
   INTEGER(KIND=4):: x_min,x_max,y_min,y_max
   REAL(KIND=8), DIMENSION(x_min-2:x_max+2,y_min-2:y_max+2) :: density
   REAL(KIND=8), DIMENSION(x_min-2:x_max+2,y_min-2:y_max+2) :: energy
@@ -68,6 +72,13 @@ SUBROUTINE tea_leaf_kernel_init_cg_fortran(x_min,  &
 
    INTEGER         ::            CONDUCTIVITY        = 1 &
                                 ,RECIP_CONDUCTIVITY  = 2
+
+  ! These need to be kept consistent with the data module to avoid use statement
+  INTEGER,PARAMETER       :: CHUNK_LEFT   =1    &
+                            ,CHUNK_RIGHT  =2    &
+                            ,CHUNK_BOTTOM =3    &
+                            ,CHUNK_TOP    =4    &
+                            ,EXTERNAL_FACE=-1
 
   rro = 0.0_8
   p = 0.0_8
@@ -109,6 +120,46 @@ SUBROUTINE tea_leaf_kernel_init_cg_fortran(x_min,  &
      ENDDO
    ENDDO
 !$OMP END DO
+
+! Whether to apply reflective boundary conditions to all external faces
+  IF (reflective_boundary .EQV. .TRUE.) THEN
+    IF (zero_boundary(CHUNK_LEFT).EQV..TRUE.) THEN
+!$OMP DO
+      DO k=y_min-2,y_max+2
+        DO j=x_min-2,x_min
+          Kx(j,k)=0.0_8
+        ENDDO
+      ENDDO
+!$OMP END DO
+    ENDIF
+    IF (zero_boundary(CHUNK_RIGHT).EQV..TRUE.) THEN
+!$OMP DO
+      DO k=y_min-2,y_max+2
+        DO j=x_max + 1,x_max+2
+          Kx(j,k)=0.0_8
+        ENDDO
+      ENDDO
+!$OMP END DO
+    ENDIF
+    IF (zero_boundary(CHUNK_BOTTOM).EQV..TRUE.) THEN
+!$OMP DO
+      DO k=y_min-2,y_min
+        DO j=x_min-2,x_max+2
+          Ky(j,k)=0.0_8
+        ENDDO
+      ENDDO
+!$OMP END DO
+    ENDIF
+    IF (zero_boundary(CHUNK_TOP).EQV..TRUE.) THEN
+!$OMP DO
+      DO k=y_max + 1,y_max+2
+        DO j=x_min-2,x_max+2
+          Ky(j,k)=0.0_8
+        ENDDO
+      ENDDO
+!$OMP END DO
+    ENDIF
+  ENDIF
 
 !$OMP DO
     DO k=y_min,y_max

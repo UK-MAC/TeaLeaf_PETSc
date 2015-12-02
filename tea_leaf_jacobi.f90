@@ -23,28 +23,37 @@ MODULE tea_leaf_kernel_module
 
 CONTAINS
 
-SUBROUTINE tea_leaf_kernel_init(x_min,        &
-                           x_max,             &
-                           y_min,             &
-                           y_max,             &
-                           celldx,            &
-                           celldy,            &
-                           volume,            &
-                           density,           &
-                           energy,            &
-                           u0,                &
-                           u1,                &
-                           un,                &
-                           Kx_tmp,            &
-                           Ky_tmp,            &
-                           Kx,                &
-                           Ky,                &
+SUBROUTINE tea_leaf_kernel_init(x_min,          &
+                           x_max,               &
+                           y_min,               &
+                           y_max,               &
+                           zero_boundary      , &
+                           reflective_boundary, &
+                           celldx,              &
+                           celldy,              &
+                           volume,              &
+                           density,             &
+                           energy,              &
+                           u0,                  &
+                           u1,                  &
+                           un,                  &
+                           Kx_tmp,              &
+                           Ky_tmp,              &
+                           Kx,                  &
+                           Ky,                  &
                            coef)
 
   IMPLICIT NONE
 
    INTEGER         ::            CONDUCTIVITY        = 1 &
                                 ,RECIP_CONDUCTIVITY  = 2
+
+  ! These need to be kept consistent with the data module to avoid use statement
+  INTEGER, PARAMETER      :: CHUNK_LEFT   =1    &
+                            ,CHUNK_RIGHT  =2    &
+                            ,CHUNK_BOTTOM =3    &
+                            ,CHUNK_TOP    =4    &
+                            ,EXTERNAL_FACE=-1
 
   INTEGER(KIND=4):: x_min,x_max,y_min,y_max
   REAL(KIND=8), DIMENSION(x_min-2:x_max+2) :: celldx
@@ -62,8 +71,10 @@ SUBROUTINE tea_leaf_kernel_init(x_min,        &
 
   INTEGER(KIND=4) :: coef
 
-  INTEGER(KIND=4) :: j,k,n
+  LOGICAL :: reflective_boundary
+  LOGICAL, DIMENSION(4) :: zero_boundary
 
+  INTEGER(KIND=4) :: j,k,n
 
 ! CALC DIFFUSION COEFFICIENT
 !$OMP PARALLEL
@@ -95,6 +106,46 @@ SUBROUTINE tea_leaf_kernel_init(x_min,        &
     ENDDO
   ENDDO
 !$OMP END DO
+
+! Whether to apply reflective boundary conditions to all external faces
+  IF (reflective_boundary .EQV. .TRUE.) THEN
+    IF (zero_boundary(CHUNK_LEFT).EQV..TRUE.) THEN
+!$OMP DO
+      DO k=y_min-2,y_max+2
+        DO j=x_min-2,x_min
+          Kx(j,k)=0.0_8
+        ENDDO
+      ENDDO
+!$OMP END DO
+    ENDIF
+    IF (zero_boundary(CHUNK_RIGHT).EQV..TRUE.) THEN
+!$OMP DO
+      DO k=y_min-2,y_max+2
+        DO j=x_max + 1,x_max+2
+          Kx(j,k)=0.0_8
+        ENDDO
+      ENDDO
+!$OMP END DO
+    ENDIF
+    IF (zero_boundary(CHUNK_BOTTOM).EQV..TRUE.) THEN
+!$OMP DO
+      DO k=y_min-2,y_min
+        DO j=x_min-2,x_max+2
+          Ky(j,k)=0.0_8
+        ENDDO
+      ENDDO
+!$OMP END DO
+    ENDIF
+    IF (zero_boundary(CHUNK_TOP).EQV..TRUE.) THEN
+!$OMP DO
+      DO k=y_max + 1,y_max+2
+        DO j=x_min-2,x_max+2
+          Ky(j,k)=0.0_8
+        ENDDO
+      ENDDO
+!$OMP END DO
+    ENDIF
+  ENDIF
 
 !$OMP DO 
   DO k=y_min-1, y_max+1
