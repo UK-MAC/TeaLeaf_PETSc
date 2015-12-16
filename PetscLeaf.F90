@@ -21,6 +21,7 @@ MODULE PETScTeaLeaf
   ! It will automatically stop when it coarsens
   ! down to 1 global cell
   PetscInt,parameter :: max_nlevels=10
+  !PetscInt,parameter :: max_nlevels=2
 
   KSP :: kspObj
   PC  :: pcObj
@@ -56,16 +57,23 @@ SUBROUTINE setup_petsc(eps,max_iters)
 
    ! ~~~~~~~~~~~~~
 
-  INTEGER :: c,cx,cy
+  INTEGER :: max_iters
   REAL(kind=8) :: eps
-  INTEGER :: max_iters, nlevels
-  INTEGER :: our_level, petsc_level
 
-  PetscInt :: refine_x=2,refine_y=2,refine_z=1 
-  PetscInt :: x_cells_coarse, y_cells_coarse, z_cells_coarse
+  INTEGER :: nlevels, our_level, petsc_level
+
+  PetscInt :: refine_x=2, refine_y=2, refine_z=1
+  PetscInt :: actual_refine_x, actual_refine_y, actual_refine_z
+  PetscInt :: x_cells, y_cells, z_cells
+  PetscInt :: x_cells_old, y_cells_old, z_cells_old
+  PetscInt,allocatable,dimension(:) :: lx_coarse,ly_coarse
   PetscViewer :: viewer
   PetscReal :: ztafill=5.0,efill=1.0
-  
+
+  Vec :: rowsum
+  PetscInt :: location_min, location_max
+  PetscReal :: value_min, value_max
+
   ! ~~~~~~~~~~~~~
 
   ! Initialise PETSc
@@ -75,20 +83,12 @@ SUBROUTINE setup_petsc(eps,max_iters)
   ! Create a PETSc DM object to represent the structured grid
   ! ~~~~~~~~~~~~~
 
+  CALL DMDACreate2D(PETSC_COMM_WORLD,                      &
 #if PETSC_VER == 342
-  CALL DMDACreate2D(PETSC_COMM_WORLD,                      &
                     DMDA_BOUNDARY_NONE,DMDA_BOUNDARY_NONE, &
-                    DMDA_STENCIL_STAR,                     &
-                    grid%x_cells,                          &
-                    grid%y_cells,                          &
-                    px,py,                                 &
-                    1,1,                                   &
-                    lx(1:px),                              &
-                    ly(1:py),                              &
-                    petscDA(1),perr)
 #else
-  CALL DMDACreate2D(PETSC_COMM_WORLD,                      &
                     DM_BOUNDARY_NONE,DM_BOUNDARY_NONE,     &
+#endif
                     DMDA_STENCIL_STAR,                     &
                     grid%x_cells,                          &
                     grid%y_cells,                          &
@@ -97,7 +97,6 @@ SUBROUTINE setup_petsc(eps,max_iters)
                     lx(1:px),                              &
                     ly(1:py),                              &
                     petscDA(1),perr)
-#endif
 
   ! ~~~~~~~~~~~~~   
   ! Use the DM coarsen to create the coarse grids 
@@ -124,9 +123,17 @@ SUBROUTINE setup_petsc(eps,max_iters)
   ! ~~~~~~~~~~~~~   
 
   ! Loop over the levels and coarsen the DM 
+  x_cells_old = grid%x_cells
+  y_cells_old = grid%y_cells
+  !z_cells_old = grid%z_cells
+
+  actual_refine_x=refine_x;
+  actual_refine_y=refine_y;
+  actual_refine_z=refine_z;
+
   level_loop_1: DO our_level = 2, max_nlevels
    
-    CALL DMDASetRefinementFactor(petscDA(our_level-1),             &
+    CALL DMDASetRefinementFactor(petscDA(our_level-1),       &
                                  refine_x,                   &
                                  refine_y,                   &
                                  refine_z,                   &
@@ -134,38 +141,68 @@ SUBROUTINE setup_petsc(eps,max_iters)
                                  
     ! need this to force the coarsening factors to be set from the refinement factors                                 
     CALL DMSetFromOptions(petscDA(our_level-1),perr) 
-    CALL DMCoarsen(petscDA(our_level-1),PETSC_COMM_WORLD,petscDA(our_level),perr)
+
+    ! get the refinement factors actually being used, set from the options file or command line
+    !CALL DMDAGetRefinementFactor(petscDA(our_level-1),              &
+    !                             actual_refine_x,                   &
+    !                             actual_refine_y,                   &
+    !                             actual_refine_z,                   &
+    !                             perr)
+
+    if (x_cells_old >= px*actual_refine_x .and. y_cells_old >= py*actual_refine_y) then
+      CALL DMCoarsen(petscDA(our_level-1),PETSC_COMM_WORLD,petscDA(our_level),perr)
     
-    ! Get the number of cells in x, y and z on the coarse level
-    call DMDAGetInfo(petscDA(our_level), &
-                     PETSC_NULL_INTEGER, &
-                     x_cells_coarse, &
-                     y_cells_coarse, &
-                     z_cells_coarse, &
-                     PETSC_NULL_INTEGER, &
-                     PETSC_NULL_INTEGER, &
-                     PETSC_NULL_INTEGER, &
-                     PETSC_NULL_INTEGER, &
-                     PETSC_NULL_INTEGER, &
-                     PETSC_NULL_INTEGER, &
-                     PETSC_NULL_INTEGER, &
-                     PETSC_NULL_INTEGER, &
-                     PETSC_NULL_INTEGER, &
-                     PETSC_NULL_INTEGER, &
-                     perr)
-                     
-    ! If we have coarsened to a grid with local dimension 1
-    ! in any direction, stop
-    if (x_cells_coarse == px .OR. &
-        y_cells_coarse == py) then
-        
-      ! nlevels is now the maximum number of levels we have
-      ! including the top grid
+      ! Get the number of cells in x, y and z on the coarse level
+      call DMDAGetInfo(petscDA(our_level), &
+                       PETSC_NULL_INTEGER, &
+                       x_cells, &
+                       y_cells, &
+                       z_cells, &
+                       PETSC_NULL_INTEGER, &
+                       PETSC_NULL_INTEGER, &
+                       PETSC_NULL_INTEGER, &
+                       PETSC_NULL_INTEGER, &
+                       PETSC_NULL_INTEGER, &
+                       PETSC_NULL_INTEGER, &
+                       PETSC_NULL_INTEGER, &
+                       PETSC_NULL_INTEGER, &
+                       PETSC_NULL_INTEGER, &
+                       PETSC_NULL_INTEGER, &
+                       perr)
+
+      ! We have to resort to getting the information from successive levels
+      ! rather than from the DMDAGetRefinementFactor due to problems with a
+      ! missing fortran interface
+      actual_refine_x=(x_cells_old+x_cells-1)/x_cells;
+      actual_refine_y=(y_cells_old+y_cells-1)/y_cells;
+      !actual_refine_z=z_cells_old/z_cells;
+      x_cells_old=x_cells
+      y_cells_old=y_cells
+      !z_cells_old=z_cells
+    else
+      allocate(lx_coarse(px),ly_coarse(py))
+      lx_coarse=1; ly_coarse=1;
+      CALL DMDACreate2D(PETSC_COMM_WORLD,                      &
+#if PETSC_VER == 342
+                        DMDA_BOUNDARY_NONE,DMDA_BOUNDARY_NONE, &
+#else
+                        DM_BOUNDARY_NONE,DM_BOUNDARY_NONE,     &
+#endif
+                        DMDA_STENCIL_STAR,                     &
+                        px,                                    &
+                        py,                                    &
+                        px,py,                                 &
+                        1,1,                                   &
+                        lx_coarse(1:px),                       &
+                        ly_coarse(1:py),                       &
+                        petscDA(our_level),perr)
+      deallocate(lx_coarse,ly_coarse)
       nlevels = our_level
       exit level_loop_1
+    endif
         
     ! Otherwise use all levels
-    else if (our_level == max_nlevels) then
+    if (our_level == max_nlevels) then
       nlevels = max_nlevels        
     end if
        
@@ -180,13 +217,34 @@ SUBROUTINE setup_petsc(eps,max_iters)
     
     ! Create the restrictor going from our_level to our_level-1
     CALL DMCreateAggregates(petscDA(our_level), petscDA(our_level - 1), ZT(our_level - 1), perr)
-    
+
+    CALL DMCreateGlobalVector(petscDA(our_level), rowsum, perr)
+    CALL VecSetFromOptions(rowsum, perr)
+    CALL MatGetRowSum(ZT(our_level - 1), rowsum, perr)
+    CALL VecMin(rowsum, location_min, value_min, perr)
+    CALL VecMax(rowsum, location_max, value_max, perr)
+    CALL VecDestroy(rowsum, perr)
+    IF (parallel%boss) THEN
+      WRITE(6,*) "Level ",our_level-1," rowsum ZT min=",location_min,value_min, &
+                                      " rowsum ZT max=",location_max,value_max
+    ENDIF
+
     ! Explicltly go and create the prolongator by transposing
     ! For some reason PETSc isn't letting us just call PCMGSetInterpolation and give
     ! it the restrictor, the doc says it is clever enough to work out whether you are 
     ! passing in the restrictor or prolongator
-    call MatTranspose(ZT(our_level - 1), MAT_INITIAL_MATRIX, Z(our_level - 1), perr)
+    CALL MatTranspose(ZT(our_level - 1), MAT_INITIAL_MATRIX, Z(our_level - 1), perr)
       
+    CALL DMCreateGlobalVector(petscDA(our_level-1), rowsum, perr)
+    CALL VecSetFromOptions(rowsum, perr)
+    CALL MatGetRowSum(Z(our_level - 1), rowsum, perr)
+    CALL VecMin(rowsum, location_min, value_min, perr)
+    CALL VecMax(rowsum, location_max, value_max, perr)
+    CALL VecDestroy(rowsum, perr)
+    IF (parallel%boss) THEN
+      WRITE(6,*) "Level ",our_level-1," rowsum Z  min=",location_min,value_min, &
+                                      " rowsum Z  max=",location_max,value_max
+    ENDIF
   ENDDO
   
   ! ~~~~~~~~~~~~~   
@@ -483,23 +541,6 @@ SUBROUTINE setupMatA_petsc(c,rx,ry)
         c4 = (-1*ry) * chunks(c)%field%Vector_Ky(i,j)
         c5 = (-1*ry) * chunks(c)%field%Vector_Ky(i,j+1)
 
-        ! Applying reflective boundary conditions independent of the Ky and Ky values - potential source of inconsistency
-        IF(i_g == 1) THEN ! Global X Low Boundary
-          c2=0
-        ENDIF
-
-        IF(i_g == grid%x_cells) THEN
-          c3=0
-        ENDIF
-
-        IF(j_g == 1) THEN
-          c4=0
-        ENDIF
-        
-        IF(j_g == grid%y_cells) THEN
-          c5=0
-        ENDIF
-
         c1 = (1.0_8-c2-c3-c4-c5)
 
         IF(.NOT.(j_g == 1)) THEN     ! Not Bottom External Boundary
@@ -550,8 +591,10 @@ END SUBROUTINE setupMatA_petsc
 
 SUBROUTINE solve_petsc(numit,error)
 
-    USE MPI
+    !USE MPI
     USE data_module
+
+    include "mpif.h"
 
     INTEGER,INTENT(INOUT) :: numit
     REAL(KIND=8),INTENT(INOUT) :: error
@@ -722,9 +765,11 @@ END SUBROUTINE solve_petsc_pgcg
 
 SUBROUTINE printXVec(fileName)
 
-    USE MPI
+    !USE MPI
 
     IMPLICIT NONE
+
+    include "mpif.h"
 
 #   include "finclude/petscviewer.h"
 
@@ -746,9 +791,11 @@ END SUBROUTINE printXVec
 
 SUBROUTINE printBVec(fileName)
 
-    USE MPI
+    !USE MPI
 
     IMPLICIT NONE
+
+    include "mpif.h"
 
 #   include "finclude/petscviewer.h"
 
@@ -769,9 +816,11 @@ END SUBROUTINE printBVec
 
 SUBROUTINE printMatA(fileName)
 
-    USE MPI
+    !USE MPI
 
     IMPLICIT NONE
+
+    include "mpif.h"
 
 #   include "finclude/petscviewer.h"
 

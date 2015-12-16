@@ -73,7 +73,10 @@
 # COM_PATH_P=/home/usid/petsc-3.5.2/arch-linux2-c-opt make
 #
 # Here is an example of how you might compile with the intel compiler if the location of libraries is not already loaded via a module system.
-# COM_PATH_P=/home/usid/petsc-3.5.2/intel-13.1-opt HYPRE_LIB=/opt/hypre/2.9.0b/lib OTHER_LIBS=/opt/intel/composer_xe_2013.5.192/compiler/lib/intel64 make COMPILER=INTEL
+# COM_PATH_P=/home/usid/petsc-3.5.2/intel-13.1-opt HYPRE_LIB=/opt/hypre/2.9.0b/lib OTHER_LIBS=/opt/intel/composer_xe_2013.5.192/compiler/lib/intel64 make 
+# LD_LIBRARY_PATH=/home/richard/Documents/TeaLeaf_PETSc/petsc/arch-linux2-c-opt/lib:/home/richard/gcc-trunk/lib
+
+COMPILER=INTEL
 
 ifndef COMPILER
   MESSAGE=select a compiler to compile in OpenMP, e.g. make COMPILER=INTEL
@@ -206,13 +209,15 @@ tea_leaf: c_lover *.f90 Makefile
 	tea_leaf.f90			\
 	diffuse.f90                     \
 	timer_c.o                       \
+        dainterp.o                      \
 	$(PETSC_LIB)   			\
 	$(REQ_LIB)			\
 	-o tea_leaf; echo $(MESSAGE)
 
 c_lover: *.c Makefile
 	$(C_MPI_COMPILER) $(CFLAGS)     \
-	timer_c.c
+	timer_c.c                       \
+        dainterp.c
 
 clean:
 	rm -f *.o *.mod *genmod* *.lst *.cub *.ptx tea_leaf
