@@ -149,7 +149,7 @@ SUBROUTINE setup_petsc(eps,max_iters)
     !                             actual_refine_z,                   &
     !                             perr)
 
-    if (x_cells_old >= px*actual_refine_x .and. y_cells_old >= py*actual_refine_y) then
+    if (x_cells_old > px*actual_refine_x .and. y_cells_old > py*actual_refine_y) then
       CALL DMCoarsen(petscDA(our_level-1),PETSC_COMM_WORLD,petscDA(our_level),perr)
     
       ! Get the number of cells in x, y and z on the coarse level
