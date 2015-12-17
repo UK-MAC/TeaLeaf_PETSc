@@ -60,7 +60,7 @@ SUBROUTINE setup_petsc(eps,max_iters)
   INTEGER :: max_iters
   REAL(kind=8) :: eps
 
-  INTEGER :: nlevels, our_level, petsc_level
+  INTEGER :: nlevels, our_level, petsc_level, levels
 
   PetscInt :: refine_x=2, refine_y=2, refine_z=1
   PetscInt :: actual_refine_x, actual_refine_y, actual_refine_z
@@ -276,6 +276,11 @@ SUBROUTINE setup_petsc(eps,max_iters)
   ! Set the PC type to MG
   call PCSetType(pcObj, PCMG, perr)
   
+  ! Enable the user to set the number of levels for the MG PC from the command line
+  CALL PCSetFromOptions(pcObj, perr)
+  CALL PCMGGetLevels(pcObj, levels, perr)
+  if (levels > 0) nlevels=levels
+
   ! Set the number of levels for the MG
   ! You must do this before calling any other PETSc 
   ! multigrid routines
