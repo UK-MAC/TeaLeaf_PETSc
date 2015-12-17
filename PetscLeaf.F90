@@ -279,7 +279,7 @@ SUBROUTINE setup_petsc(eps,max_iters)
   ! Enable the user to set the number of levels for the MG PC from the command line
   CALL PCSetFromOptions(pcObj, perr)
   CALL PCMGGetLevels(pcObj, levels, perr)
-  if (levels > 0) nlevels=levels
+  if (levels > 0) nlevels=min(levels,nlevels)
 
   ! Set the number of levels for the MG
   ! You must do this before calling any other PETSc 
