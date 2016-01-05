@@ -25,13 +25,18 @@ MODULE PETScTeaLeaf
 
   KSP :: kspObj
   PC  :: pcObj
-  Vec :: Sol
   Vec :: X
+  Vec :: Y
   Vec :: B
   Mat :: A
   Vec :: XLoc
   Vec :: RHSLoc
   
+  KSP :: kspObjr
+  PC  :: pcObjr
+  Vec :: Xr
+  Vec :: Br
+
   ! The DMs representing each coarse grid
   DM  :: petscDA(max_nlevels)
   ! The restrictors are stored in this structure
@@ -73,6 +78,7 @@ SUBROUTINE setup_petsc(eps,max_iters)
   Vec :: rowsum
   PetscInt :: location_min, location_max
   PetscReal :: value_min, value_max
+  PCType :: pctype
 
   ! ~~~~~~~~~~~~~
 
@@ -218,16 +224,16 @@ SUBROUTINE setup_petsc(eps,max_iters)
     ! Create the restrictor going from our_level to our_level-1
     CALL DMCreateAggregates(petscDA(our_level), petscDA(our_level - 1), ZT(our_level - 1), perr)
 
-    CALL DMCreateGlobalVector(petscDA(our_level), rowsum, perr)
-    CALL VecSetFromOptions(rowsum, perr)
-    CALL MatGetRowSum(ZT(our_level - 1), rowsum, perr)
-    CALL VecMin(rowsum, location_min, value_min, perr)
-    CALL VecMax(rowsum, location_max, value_max, perr)
-    CALL VecDestroy(rowsum, perr)
-    IF (parallel%boss) THEN
-      WRITE(6,*) "Level ",our_level-1," rowsum ZT min=",location_min,value_min, &
-                                      " rowsum ZT max=",location_max,value_max
-    ENDIF
+    !CALL DMCreateGlobalVector(petscDA(our_level), rowsum, perr)
+    !CALL VecSetFromOptions(rowsum, perr)
+    !CALL MatGetRowSum(ZT(our_level - 1), rowsum, perr)
+    !CALL VecMin(rowsum, location_min, value_min, perr)
+    !CALL VecMax(rowsum, location_max, value_max, perr)
+    !CALL VecDestroy(rowsum, perr)
+    !IF (parallel%boss) THEN
+    !  WRITE(6,*) "Level ",our_level-1," rowsum ZT min=",location_min,value_min, &
+    !                                  " rowsum ZT max=",location_max,value_max
+    !ENDIF
 
     ! Explicltly go and create the prolongator by transposing
     ! For some reason PETSc isn't letting us just call PCMGSetInterpolation and give
@@ -235,16 +241,16 @@ SUBROUTINE setup_petsc(eps,max_iters)
     ! passing in the restrictor or prolongator
     CALL MatTranspose(ZT(our_level - 1), MAT_INITIAL_MATRIX, Z(our_level - 1), perr)
       
-    CALL DMCreateGlobalVector(petscDA(our_level-1), rowsum, perr)
-    CALL VecSetFromOptions(rowsum, perr)
-    CALL MatGetRowSum(Z(our_level - 1), rowsum, perr)
-    CALL VecMin(rowsum, location_min, value_min, perr)
-    CALL VecMax(rowsum, location_max, value_max, perr)
-    CALL VecDestroy(rowsum, perr)
-    IF (parallel%boss) THEN
-      WRITE(6,*) "Level ",our_level-1," rowsum Z  min=",location_min,value_min, &
-                                      " rowsum Z  max=",location_max,value_max
-    ENDIF
+    !CALL DMCreateGlobalVector(petscDA(our_level-1), rowsum, perr)
+    !CALL VecSetFromOptions(rowsum, perr)
+    !CALL MatGetRowSum(Z(our_level - 1), rowsum, perr)
+    !CALL VecMin(rowsum, location_min, value_min, perr)
+    !CALL VecMax(rowsum, location_max, value_max, perr)
+    !CALL VecDestroy(rowsum, perr)
+    !IF (parallel%boss) THEN
+    !  WRITE(6,*) "Level ",our_level-1," rowsum Z  min=",location_min,value_min, &
+    !                                  " rowsum Z  max=",location_max,value_max
+    !ENDIF
   ENDDO
   
   ! ~~~~~~~~~~~~~   
@@ -258,6 +264,7 @@ SUBROUTINE setup_petsc(eps,max_iters)
   CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_REAL,PETSC_DEFAULT_REAL,max_iters,perr)
 #endif
 
+  CALL KSPSetInitialGuessNonzero(kspObj,PETSC_TRUE,perr)
   CALL KSPSetCheckNormIteration(kspObj,-1,perr)
   CALL KSPSetFromOptions(kspObj,perr)
 
@@ -278,38 +285,103 @@ SUBROUTINE setup_petsc(eps,max_iters)
   
   ! Enable the user to set the number of levels for the MG PC from the command line (minimum of 2 levels)
   CALL PCSetFromOptions(pcObj, perr)
-  CALL PCMGGetLevels(pcObj, levels, perr)
-  if (levels > 1) nlevels=min(levels,nlevels)
+  CALL PCGetType(pcObj, pctype, perr)
+  if (pctype == PCMG) then
+     CALL PCMGGetLevels(pcObj, levels, perr)
+     if (levels > 1) nlevels=min(levels,nlevels)
 
   ! Set the number of levels for the MG
   ! You must do this before calling any other PETSc 
   ! multigrid routines
-  call PCMGSetLevels(pcObj, nlevels, PETSC_NULL_OBJECT, perr)
+     call PCMGSetLevels(pcObj, nlevels, PETSC_NULL_OBJECT, perr)
   
   ! Tell PETSc to use a Galerkin projection to form the 
   ! coarse space matrices
-  call PCMGSetGalerkin(pcObj, .TRUE., perr)
+     call PCMGSetGalerkin(pcObj, .TRUE., perr)
 
   ! Loop over the levels
   ! from the second grid to the coarsest grid 
-  do our_level = 1, nlevels-1
+     do our_level = 1, nlevels-1
     
-    ! Get our_level numbering
-    petsc_level = nlevels - our_level
+  ! Get our_level numbering
+        petsc_level = nlevels - our_level
             
-    ! Set the prolongator
-    ! We don't have to bother setting the restrictor as PETSc
-    ! will just take the transpose
-    call PCMGSetInterpolation(pcObj, petsc_level, Z(our_level), perr)
+  ! Set the prolongator
+  ! We don't have to bother setting the restrictor as PETSc
+  ! will just take the transpose
+        call PCMGSetInterpolation(pcObj, petsc_level, Z(our_level), perr)
         
-  end do
+     end do
+  end if
 
   ! Enable the user to set options for the PC from the command line
   CALL PCSetFromOptions(pcObj,perr) 
 
   ! Set the PC to the KSP
   call KSPSetPC(kspObj, pcObj, perr)
+
+  ! ~~~~~~~~~~~~~   
+  ! Setup the KSP Solver for E
+  ! ~~~~~~~~~~~~~  
   
+  CALL KSPCreate(MPI_COMM_WORLD,kspObjr,perr)
+  CALL KSPAppendOptionsPrefix(kspObjr,'Einv_',perr)
+#if PETSC_VER == 342
+  CALL KSPSetTolerances(kspObjr,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
+#else
+  CALL KSPSetTolerances(kspObjr,eps,PETSC_DEFAULT_REAL,PETSC_DEFAULT_REAL,max_iters,perr)
+#endif
+
+  CALL KSPSetInitialGuessNonzero(kspObjr,PETSC_FALSE,perr)
+  CALL KSPSetCheckNormIteration(kspObjr,-1,perr)
+  CALL KSPSetFromOptions(kspObjr,perr)
+
+  ! ~~~~~~~~~~~~~   
+  ! Setup the PC for the ksp for E
+  ! ~~~~~~~~~~~~~    
+  call PCCreate(MPI_COMM_WORLD, pcObjr, perr)
+  CALL PCAppendOptionsPrefix(pcObjr,'Einv_',perr)
+  
+  ! Set the PC type to MG
+  call PCSetType(pcObjr, PCMG, perr)
+  
+  ! Enable the user to set the number of levels for the MG PC from the command line (minimum of 2 levels)
+  CALL PCSetFromOptions(pcObjr, perr)
+  CALL PCGetType(pcObjr, pctype, perr)
+  if (pctype == PCMG) then
+     CALL PCMGGetLevels(pcObjr, levels, perr)
+     if (levels > 1) nlevels=min(levels+1,nlevels)
+
+  ! Set the number of levels for the MG
+  ! You must do this before calling any other PETSc 
+  ! multigrid routines
+     call PCMGSetLevels(pcObjr, nlevels-1, PETSC_NULL_OBJECT, perr)
+  
+  ! Tell PETSc to use a Galerkin projection to form the 
+  ! coarse space matrices
+     call PCMGSetGalerkin(pcObjr, .TRUE., perr)
+
+  ! Loop over the levels
+  ! from the third grid to the coarsest grid 
+     do our_level = 2, nlevels-1
+    
+  ! Get our_level numbering
+        petsc_level = nlevels - our_level
+            
+  ! Set the prolongator
+  ! We don't have to bother setting the restrictor as PETSc
+  ! will just take the transpose
+        call PCMGSetInterpolation(pcObjr, petsc_level, Z(our_level), perr)
+        
+     end do
+  end if
+
+  ! Enable the user to set options for the PC from the command line
+  CALL PCSetFromOptions(pcObjr,perr)
+
+  ! Set the PC to the KSP
+  call KSPSetPC(kspObjr, pcObjr, perr)
+
   ! ~~~~~~~~~~~~~   
   ! Create the sparsity of the A matrix
   ! and preallocate
@@ -332,10 +404,13 @@ SUBROUTINE setup_petsc(eps,max_iters)
   ! ~~~~~~~~~~~~~    
 
   ! Setup the initial solution vector
-  CALL DMCreateGlobalVector(petscDA(1),X,perr)
+  CALL DMCreateGlobalVector(petscDA(1),X ,perr)
+  CALL DMCreateGlobalVector(petscDA(1),Y ,perr)
+  CALL DMCreateGlobalVector(petscDA(2),Xr,perr)
 
   ! Duplicate Vector to setup B
-  CALL DMCreateGlobalVector(petscDA(1),B,perr)
+  CALL DMCreateGlobalVector(petscDA(1),B ,perr)
+  CALL DMCreateGlobalVector(petscDA(2),Br,perr)
 
   ! Local Vector for RHS Vector
   CALL DMCreateLocalVector(petscDA(1),RHSLoc,perr)
@@ -608,6 +683,26 @@ SUBROUTINE solve_petsc(numit,error)
     PetscReal :: residual  ! Final residual
 
     CALL KSPSetOperators(kspObj,A,A,perr)
+
+!ADEF2 projection of the initial guess/RHS - allows use of pre-smoothing only in the MG solver
+
+    CALL MatPtAP(A,Z(1),MAT_INITIAL_MATRIX,1.0_8,E(1),perr)
+    CALL KSPSetOperators(kspObjr,E(1),E(1),perr)
+
+!zero initial guess:
+    !CALL VecZeroEntries(X,perr)       ! X->0
+    !CALL MatMult(ZT(1),B,Br,perr)     ! Br->ZT(1)*B
+!or non-zero initial guess:
+    CALL MatMult(A,X,Y,perr)
+    CALL VecAYPX(Y,-1.0_8,B,perr)     ! Y->B-A*X
+    CALL MatMult(ZT(1),Y,Br,perr)     ! Br->ZT(1)*Y
+
+    CALL VecZeroEntries(Xr,perr)      ! Xr->0
+    CALL KSPSolve(kspObjr,Br,Xr,perr) ! Xr->E(1)^{-1}*Br
+    CALL MatMultAdd(Z(1),Xr,X,X,perr) ! X->X+Z*Xr
+
+    CALL MatDestroy(E(1),perr)
+
     CALL KSPSolve(kspObj,B,X,perr)
     CALL KSPGetIterationNumber(kspObj, numit, perr)
 
@@ -687,7 +782,7 @@ SUBROUTINE solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)
 #else
     CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_REAL,PETSC_DEFAULT_REAL,pgcg_cg_iter,perr)
 #endif
-    CALL KSPSetInitialGuessNonzero(kspObj,PETSC_FALSE,perr)
+    CALL KSPSetInitialGuessNonzero(kspObj,PETSC_TRUE,perr)
 
     CALL KSPSolve(kspObj,B,X,perr)
 
