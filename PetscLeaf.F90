@@ -79,6 +79,7 @@ SUBROUTINE setup_petsc(eps,max_iters)
   PetscInt :: location_min, location_max
   PetscReal :: value_min, value_max
   PCType :: pctype
+  KSP :: kspdn, kspup
 
   ! ~~~~~~~~~~~~~
 
@@ -279,12 +280,13 @@ SUBROUTINE setup_petsc(eps,max_iters)
   ! Setup the PC for the ksp
   ! ~~~~~~~~~~~~~    
   call PCCreate(MPI_COMM_WORLD, pcObj, perr)
-  
+
   ! Set the PC type to MG
   call PCSetType(pcObj, PCMG, perr)
   
   ! Enable the user to set the number of levels for the MG PC from the command line (minimum of 2 levels)
   CALL PCSetFromOptions(pcObj, perr)
+
   CALL PCGetType(pcObj, pctype, perr)
   if (pctype == PCMG) then
      CALL PCMGGetLevels(pcObj, levels, perr)
@@ -310,7 +312,13 @@ SUBROUTINE setup_petsc(eps,max_iters)
   ! We don't have to bother setting the restrictor as PETSc
   ! will just take the transpose
         call PCMGSetInterpolation(pcObj, petsc_level, Z(our_level), perr)
-        
+
+        if (our_level == 1) then
+           call PCMGGetSmootherDown(pcObj, petsc_level, kspdn, perr)
+           call KSPSetOptionsPrefix(kspdn, 'dn_', perr)        
+           call PCMGGetSmootherUp  (pcObj, petsc_level, kspup, perr)
+           call KSPSetOptionsPrefix(kspup, 'up_', perr)
+        endif
      end do
   end if
 
@@ -325,7 +333,12 @@ SUBROUTINE setup_petsc(eps,max_iters)
   ! ~~~~~~~~~~~~~  
   
   CALL KSPCreate(MPI_COMM_WORLD,kspObjr,perr)
-  CALL KSPAppendOptionsPrefix(kspObjr,'Einv_',perr)
+  if (nlevels > 2) then
+     CALL KSPAppendOptionsPrefix(kspObjr,'Einv_',perr)
+  else
+     call KSPSetOptionsPrefix   (kspObjr,'Einv_mg_coarse_',perr)
+  endif
+
 #if PETSC_VER == 342
   CALL KSPSetTolerances(kspObjr,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
 #else
@@ -342,9 +355,13 @@ SUBROUTINE setup_petsc(eps,max_iters)
   call PCCreate(MPI_COMM_WORLD, pcObjr, perr)
   CALL PCAppendOptionsPrefix(pcObjr,'Einv_',perr)
   
-  ! Set the PC type to MG
-  call PCSetType(pcObjr, PCMG, perr)
-  
+  ! Set the PC type to MG, but only if there is a coarser level than E
+  if (nlevels > 2) then
+     call PCSetType(pcObjr, PCMG, perr)
+  else
+     call PCSetOptionsPrefix(pcObjr ,'Einv_mg_coarse_',perr)
+  endif
+
   ! Enable the user to set the number of levels for the MG PC from the command line (minimum of 2 levels)
   CALL PCSetFromOptions(pcObjr, perr)
   CALL PCGetType(pcObjr, pctype, perr)
@@ -682,7 +699,30 @@ SUBROUTINE solve_petsc(numit,error)
     KSPConvergedReason :: reason
     PetscReal :: residual  ! Final residual
 
+    PetscInt :: left,right,bottom,top,i,j,nloc
+    PetscReal,dimension(:),allocatable :: coords
+
     CALL KSPSetOperators(kspObj,A,A,perr)
+
+    ! ~~~~~~~~~~~~~   
+    ! Setup the coordinates for the PC
+    ! ~~~~~~~~~~~~~    
+
+    left   = chunks(1)%field%left
+    right  = chunks(1)%field%right
+    top    = chunks(1)%field%top
+    bottom = chunks(1)%field%bottom
+    nloc=(right-left+1)*(top-bottom+1)
+    allocate(coords(2*nloc))
+
+    DO j = bottom, top
+      DO i = left, right
+        coords(2*((i-left)+(j-bottom)*(right-left+1))+1) = chunks(1)%field%cellx((i-left)  +1)
+        coords(2*((i-left)+(j-bottom)*(right-left+1))+2) = chunks(1)%field%celly((j-bottom)+1)
+      ENDDO
+    ENDDO
+
+    call PCSetCoordinates(pcObj, 2, nloc, coords, perr)
 
 !ADEF2 projection of the initial guess/RHS - allows use of pre-smoothing only in the MG solver
 
@@ -738,6 +778,8 @@ SUBROUTINE solve_petsc(numit,error)
     ENDIF 
 
     total_petsc_iter = total_petsc_iter + numit
+
+    deallocate(coords)
 
 END SUBROUTINE solve_petsc
 
