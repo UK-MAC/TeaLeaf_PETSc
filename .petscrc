@@ -1,0 +1,52 @@
+#
+# Options for the PETSc multigrid solver (Ainv)
+#
+-Ainv_pc_mg_log
+#-Ainv_ksp_monitor
+#-Ainv_ksp_view
+# smoothers
+-Ainv_mg_levels_pc_type jacobi
+-Ainv_mg_levels_ksp_type richardson
+-Ainv_mg_levels_ksp_richardson_scale 0.67
+# coarse solver
+-Ainv_mg_coarse_pc_type jacobi
+-Ainv_mg_coarse_ksp_type richardson
+-Ainv_mg_coarse_ksp_richardson_scale 0.67
+# coarse down smoother
+-Ainv_dn_pc_type jacobi
+-Ainv_dn_ksp_type richardson
+-Ainv_dn_ksp_richardson_scale 0.67
+# smoother iterations
+-Ainv_pc_mg_smoothdown 1
+-Ainv_pc_mg_smoothup 1
+-Ainv_dn_ksp_max_it 1
+-Ainv_up_ksp_max_it 0
+# ksp type
+-Ainv_ksp_type cg
+#
+# Einv solver options (for ADEF2 only)
+#
+-Einv_pc_mg_log
+#-Einv_ksp_monitor
+#-Einv_ksp_view
+# smoothers
+-Einv_mg_levels_pc_type jacobi
+-Einv_mg_levels_ksp_type richardson
+-Einv_mg_levels_ksp_richardson_scale 0.67
+# coarse solver
+-Einv_mg_coarse_pc_type jacobi
+-Einv_mg_coarse_ksp_type richardson
+-Einv_mg_coarse_ksp_richardson_scale 0.67
+# smoother iterations
+-Einv_pc_mg_smoothdown 1
+-Einv_pc_mg_smoothup 1
+# ksp type
+-Einv_ksp_type cg
+# only perform a single iteration rather than a full solve (for speed)
+-Einv_ksp_max_it 1
+#
+# general options
+#
+-log_summary
+-options_left
+

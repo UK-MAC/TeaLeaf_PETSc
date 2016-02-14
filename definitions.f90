@@ -130,6 +130,10 @@ MODULE definitions_module
 
    INTEGER         :: jdt,kdt
 
+   LOGICAL :: use_adef2_variant	! apply the ADEF2 strategy of pre-smoothing only on the top grid
+				! combined with projection of the initial residual to ensure that
+				! we can continue to use Krylov methods targetted at SPD systems e.g. CG
+
    TYPE field_type
      REAL(KIND=8),    DIMENSION(:,:), ALLOCATABLE :: density
      REAL(KIND=8),    DIMENSION(:,:), ALLOCATABLE :: energy0,energy1

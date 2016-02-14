@@ -84,6 +84,7 @@ SUBROUTINE read_input()
   tl_use_jacobi = .TRUE.
   verbose_on = .FALSE.
   use_PETSC_kernels=.FALSE.
+  use_adef2_variant=.FALSE.
   use_pgcg=.FALSE.
   pgcg_cg_iter = 10
 
@@ -203,6 +204,8 @@ SUBROUTINE read_input()
         IF(parallel%boss)WRITE(g_out,"(1x,a25)")'Profiler on'
       CASE('use_petsc')
         use_PETSC_kernels = .TRUE.
+      CASE('use_adef2_variant')
+        use_adef2_variant=.TRUE.
       CASE('use_pgcg')
         use_pgcg = .TRUE.
       CASE('pgcg_cg_iter')

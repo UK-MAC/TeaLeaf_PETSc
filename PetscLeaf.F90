@@ -80,6 +80,7 @@ SUBROUTINE setup_petsc(eps,max_iters)
   PetscReal :: value_min, value_max
   PCType :: pctype
   KSP :: kspdn, kspup
+  PC :: pcup
 
   ! ~~~~~~~~~~~~~
 
@@ -259,6 +260,7 @@ SUBROUTINE setup_petsc(eps,max_iters)
   ! ~~~~~~~~~~~~~  
 
   CALL KSPCreate(MPI_COMM_WORLD,kspObj,perr)
+  CALL KSPAppendOptionsPrefix(kspObj,'Ainv_',perr)
 #if PETSC_VER == 342
   CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_DOUBLE_PRECISION,PETSC_DEFAULT_DOUBLE_PRECISION,max_iters,perr)
 #else
@@ -280,6 +282,7 @@ SUBROUTINE setup_petsc(eps,max_iters)
   ! Setup the PC for the ksp
   ! ~~~~~~~~~~~~~    
   call PCCreate(MPI_COMM_WORLD, pcObj, perr)
+  CALL PCAppendOptionsPrefix(pcObj,'Ainv_',perr)
 
   ! Set the PC type to MG
   call PCSetType(pcObj, PCMG, perr)
@@ -313,11 +316,16 @@ SUBROUTINE setup_petsc(eps,max_iters)
   ! will just take the transpose
         call PCMGSetInterpolation(pcObj, petsc_level, Z(our_level), perr)
 
-        if (our_level == 1) then
+        if (our_level == 1 .AND. use_adef2_variant) then
            call PCMGGetSmootherDown(pcObj, petsc_level, kspdn, perr)
-           call KSPSetOptionsPrefix(kspdn, 'dn_', perr)        
+           call KSPSetOptionsPrefix(kspdn, 'Ainv_dn_', perr)
+
            call PCMGGetSmootherUp  (pcObj, petsc_level, kspup, perr)
-           call KSPSetOptionsPrefix(kspup, 'up_', perr)
+           call KSPSetOptionsPrefix(kspup, 'Ainv_up_', perr)
+           call KSPSetTolerances(kspup, PETSC_DEFAULT_REAL, PETSC_DEFAULT_REAL, PETSC_DEFAULT_REAL, 0, perr)
+           call KSPSetType(kspup, KSPRICHARDSON, perr)	! reset the KSP to a simple Richardson update even though it shouldn't perform any iterations
+           call KSPGetPC(kspup, pcup, perr)		! some PCs e.g. PCSOR don't like having 0 iterations specified in the KSP
+           call PCSetType(pcup, PCNONE, perr)
         endif
      end do
   end if
@@ -726,22 +734,24 @@ SUBROUTINE solve_petsc(numit,error)
 
 !ADEF2 projection of the initial guess/RHS - allows use of pre-smoothing only in the MG solver
 
-    CALL MatPtAP(A,Z(1),MAT_INITIAL_MATRIX,1.0_8,E(1),perr)
-    CALL KSPSetOperators(kspObjr,E(1),E(1),perr)
+    IF (use_adef2_variant) THEN
+      CALL MatPtAP(A,Z(1),MAT_INITIAL_MATRIX,1.0_8,E(1),perr)
+      CALL KSPSetOperators(kspObjr,E(1),E(1),perr)
 
 !zero initial guess:
-    !CALL VecZeroEntries(X,perr)       ! X->0
-    !CALL MatMult(ZT(1),B,Br,perr)     ! Br->ZT(1)*B
+      !CALL VecZeroEntries(X,perr)       ! X->0
+      !CALL MatMult(ZT(1),B,Br,perr)     ! Br->ZT(1)*B
 !or non-zero initial guess:
-    CALL MatMult(A,X,Y,perr)
-    CALL VecAYPX(Y,-1.0_8,B,perr)     ! Y->B-A*X
-    CALL MatMult(ZT(1),Y,Br,perr)     ! Br->ZT(1)*Y
+      CALL MatMult(A,X,Y,perr)
+      CALL VecAYPX(Y,-1.0_8,B,perr)     ! Y->B-A*X
+      CALL MatMult(ZT(1),Y,Br,perr)     ! Br->ZT(1)*Y
 
-    CALL VecZeroEntries(Xr,perr)      ! Xr->0
-    CALL KSPSolve(kspObjr,Br,Xr,perr) ! Xr->E(1)^{-1}*Br
-    CALL MatMultAdd(Z(1),Xr,X,X,perr) ! X->X+Z*Xr
+      CALL VecZeroEntries(Xr,perr)      ! Xr->0
+      CALL KSPSolve(kspObjr,Br,Xr,perr) ! Xr->E(1)^{-1}*Br
+      CALL MatMultAdd(Z(1),Xr,X,X,perr) ! X->X+Z*Xr
 
-    CALL MatDestroy(E(1),perr)
+      CALL MatDestroy(E(1),perr)
+    ENDIF
 
     CALL KSPSolve(kspObj,B,X,perr)
     CALL KSPGetIterationNumber(kspObj, numit, perr)

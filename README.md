@@ -218,6 +218,14 @@ This keyword selects the Conjugate Gradient method to solve the linear system.
 
 This keyword selects the Chebyshev method to solve the linear system.
 
+`use_petsc`
+
+This keyword selects the PETSc solver rather than the in-built solvers (with PETSc options prefixed by Ainv_). The PETSc options are specified in the .petscrc file in the working directory.
+
+`use_adef2_variant`
+
+This keyword selects the ADEF2 variant of the PETSc solver (applied to the fine grid only). This applies a projection to the initial residual to enable the use of pre-smoothing (smoothing on the downward phase) only of the multigrid cycle involving the fine grid, while retaining the ability to employ Krylov methods for symmetric positive definite (SPD) systems. The projection step involves an additional solve on the first of the coarsened grids (with PETSc options prefixed by Einv_).
+
 `profiler_on`
 
 
