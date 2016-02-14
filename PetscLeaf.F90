@@ -22,6 +22,7 @@ MODULE PETScTeaLeaf
   ! down to 1 global cell
   PetscInt,parameter :: max_nlevels=10
   !PetscInt,parameter :: max_nlevels=2
+  PetscInt :: nlevels
 
   KSP :: kspObj
   PC  :: pcObj
@@ -65,7 +66,7 @@ SUBROUTINE setup_petsc(eps,max_iters)
   INTEGER :: max_iters
   REAL(kind=8) :: eps
 
-  INTEGER :: nlevels, our_level, petsc_level, levels
+  INTEGER :: our_level, petsc_level, levels
 
   PetscInt :: refine_x=2, refine_y=2, refine_z=1
   PetscInt :: actual_refine_x, actual_refine_y, actual_refine_z
@@ -457,6 +458,30 @@ SUBROUTINE cleanup_petsc()
 
 #include "finclude/petscsys.h"
 
+  integer :: our_level
+
+  CALL DMDestroy(petscDA(1),perr)
+  do our_level=2,nlevels
+    CALL DMDestroy(petscDA(our_level),perr)
+  enddo
+  do our_level=2,nlevels
+    CALL MatDestroy(ZT(our_level-1),perr)
+    CALL MatDestroy(Z (our_level-1),perr)
+  enddo
+  call PCDestroy (pcObj  ,perr)
+  CALL KSPDestroy(kspObj ,perr)
+  call PCDestroy (pcObjr ,perr)
+  CALL KSPDestroy(kspObjr,perr)
+  CALL MatDestroy(A,perr)
+  IF (use_adef2_variant) CALL MatDestroy(E(1),perr)
+  CALL VecDestroy(X,perr)
+  CALL VecDestroy(B,perr)
+  CALL VecDestroy(Y,perr)
+  CALL VecDestroy(Xr,perr)
+  CALL VecDestroy(Br,perr)
+  CALL VecDestroy(RHSLoc,perr)
+  CALL VecDestroy(XLoc,perr)
+
   CALL PetscFinalize(perr)
 
 END SUBROUTINE cleanup_petsc
@@ -465,7 +490,6 @@ END SUBROUTINE cleanup_petsc
 
 SUBROUTINE setupSol_petsc(c,rx,ry)
 
-    PetscErrorCode :: ierr
     INTEGER       :: c                                ! What chunk are we solving
     INTEGER       :: x_min,x_max,y_min,y_max
     INTEGER       :: g_xmin, g_xmax, g_ymin, g_ymax
@@ -511,7 +535,6 @@ END SUBROUTINE setupSol_petsc
 
 SUBROUTINE setupRHS_petsc(c,rx,ry)
 
-    PetscErrorCode :: ierr
     INTEGER       :: c                                ! What chunk are we solving
     INTEGER       :: left,right,top,bottom
     INTEGER       :: x_min,x_max,y_min,y_max
