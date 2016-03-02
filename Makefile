@@ -210,6 +210,8 @@ tea_leaf: c_lover *.f90 Makefile
 	diffuse.f90                     \
 	timer_c.o                       \
         dainterp.o                      \
+        jacobi.o                        \
+        matgetrowsumabs.o		\
 	$(PETSC_LIB)   			\
 	$(REQ_LIB)			\
 	-o tea_leaf; echo $(MESSAGE)
@@ -217,7 +219,9 @@ tea_leaf: c_lover *.f90 Makefile
 c_lover: *.c Makefile
 	$(C_MPI_COMPILER) $(CFLAGS)     \
 	timer_c.c                       \
-        dainterp.c
+        dainterp.c                      \
+        jacobi.c                        \
+        matgetrowsumabs.c
 
 clean:
 	rm -f *.o *.mod *genmod* *.lst *.cub *.ptx tea_leaf
