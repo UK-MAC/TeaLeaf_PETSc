@@ -98,7 +98,15 @@ SUBROUTINE cleanup_petsc()
 
 #include "finclude/petscsys.h"
 
-  CALL PetscFinalize(perr)
+  call KSPDestroy(kspObj,perr)
+  call VecDestroy(Sol,perr)
+  call VecDestroy(X,perr)
+  call VecDestroy(B,perr)
+  call VecDestroy(XLoc,perr)
+  call VecDestroy(RHSLoc,perr)
+  call MatDestroy(A,perr)
+  call DMDestroy(petscDA,perr)
+  call PetscFinalize(perr)
 
 END SUBROUTINE cleanup_petsc
 
