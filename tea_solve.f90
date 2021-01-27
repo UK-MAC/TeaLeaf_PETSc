@@ -499,20 +499,10 @@ SUBROUTINE tea_leaf()
         CALL setupRHS_petsc(1,rx,ry)
         CALL setupSol_petsc(1,rx,ry)
 
-        IF(use_pgcg) THEN
-          CALL solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)  ! Use Paul Garrett's Approach
-          IF(parallel%boss) WRITE(g_out,*) 'Achieved convergence in ', numit_cg ,' CG iterations and ', numit_cheby,&
-                                           ' Cheby Iterations'
-          itcount=numit_cg+numit_cheby
-          IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations is : ',  total_cg_iter, ' CG Iterations and ',&
-                                           total_cheby_iter, ' Chebyshev Iterations'
-          itcount=numit_cg+1
-        ELSE 
-          CALL solve_petsc(numit,error)    ! Use Command Line Specified Approach
-          IF(parallel%boss) WRITE(g_out,*) 'Achieved convergence in ', numit ,' iterations'
-          IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations: ',  total_petsc_iter
-          itcount=numit-1
-        ENDIF
+        CALL solve_petsc(numit,error)    ! Use Command Line Specified Approach
+        IF(parallel%boss) WRITE(g_out,*) 'Achieved convergence in ', numit ,' iterations'
+        IF(parallel%boss) WRITE(g_out,*) 'Current Total Iterations: ',  total_petsc_iter
+        itcount=numit-1
    
         CALL getSolution_petsc(1)
 

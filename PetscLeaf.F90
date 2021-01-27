@@ -2,17 +2,14 @@
 
 MODULE PETScTeaLeaf
 
+#include <petsc/finclude/petscksp.h>
+#include <petsc/finclude/petscdmda.h>
+
   USE definitions_module
+  USE petscksp
+  USE petscdmda
 
   IMPLICIT NONE
-
-#include "finclude/petscvec.h"
-#include "finclude/petscmat.h"
-#include "finclude/petscksp.h"
-#include "finclude/petscpc.h"
-#include "finclude/petscdm.h"
-#include "finclude/petscdmda.h"
-#include "finclude/petscdmda.h90"
 
   INTEGER :: perr
   INTEGER :: mpisize
@@ -32,7 +29,7 @@ SUBROUTINE setup_petsc(eps,max_iters)
 
   USE data_module
 
-#include "finclude/petscsys.h"
+#include  <petsc/finclude/petscsys.h>
 
   INTEGER :: c,cx,cy
   REAL(kind=8) :: eps
@@ -51,6 +48,9 @@ SUBROUTINE setup_petsc(eps,max_iters)
                     1,1,                                   &
                     lx(1:px),ly(1:py),                     &
                     petscDA,perr)
+
+  CALL DMSetFromOptions(petscDA, perr)
+  CALL DMSetUp(petscDA, perr)
 
   ! Setup the KSP Solver
   CALL KSPCreate(MPI_COMM_WORLD,kspObj,perr)
@@ -96,7 +96,7 @@ END SUBROUTINE setup_petsc
 
 SUBROUTINE cleanup_petsc()
 
-#include "finclude/petscsys.h"
+#include <petsc/finclude/petscsys.h>
 
   call KSPDestroy(kspObj,perr)
   call VecDestroy(Sol,perr)
@@ -394,123 +394,13 @@ SUBROUTINE solve_petsc(numit,error)
 
 END SUBROUTINE solve_petsc
 
-! Apply Paul Garrett Approach
-! (1) Use CG to Execute 10 iteration, retrieve eigenvalues
-! (2) Set Solver to Chebyshev type, set eigenvalues from CG execution
-! (3) Set Residual for Chebyshev to reduce iteration count
-! (4) Execute Chebyshev Solve
-SUBROUTINE solve_petsc_pgcg(eps,max_iters,numit_cg,numit_cheby,error)
-
-!    USE MPI
-    USE data_module
-
-#include "finclude/petscsys.h"
-
-    INTEGER,INTENT(INOUT) :: numit_cg, numit_cheby
-    INTEGER :: errcode, mpierr
-    KSPConvergedReason :: reason
-    PC :: tPC
-    REAL(KIND=8) :: eps,error
-    INTEGER :: max_iters
-    PetscReal :: r(0:pgcg_cg_iter-1)    ! Real Component of EigenValue Array
-    PetscReal :: c(0:pgcg_cg_iter-1)    ! Complex Component of EigenValue Array
-    PetscInt  :: neig      ! Number of Eigenvalues computed
-    PetscReal :: emax      ! Max EigenValue
-    PetscReal :: emin      ! Min EigenValue
-    PetscReal :: residual  ! Final residual
-
-    IF(parallel%boss) WRITE(g_out,*) 'pgcg_cg_iter set to ', pgcg_cg_iter
-
-    CALL KSPSetComputeEigenValues(kspObj,PETSC_TRUE,perr) ! Must be called before KSPSetup Routines to enable eigenvalue calculation
-
-    CALL KSPSetType(kspObj,KSPCG,perr)
-    CALL KSPGetPC(kspObj,tPC,perr)
-    CALL PCSetType(tPC,PCBJACOBI,perr)
-
-    CALL KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
-    CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_REAL,PETSC_DEFAULT_REAL,pgcg_cg_iter,perr)
-    CALL KSPSetInitialGuessNonzero(kspObj,PETSC_FALSE,perr)
-
-    CALL KSPSolve(kspObj,B,X,perr)
-
-    ! Don't check convergence reasons or iteration count here - unlikely to have converged yet
-
-    ! Calculate the EigenValues from CG Solve after 10 iterations. Array should be returned sorted.
-    CALL KSPComputeEigenValues(kspObj,pgcg_cg_iter,r,c,neig,perr)
-    emax = r(neig-1)
-    emin = r(0)
-
-    IF(parallel%boss) WRITE(g_out,*) ' Emax:', emax, ', Emin:', emin
-
-    CALL KSPGetIterationNumber(kspObj, numit_cg, perr)
-    total_cg_iter = total_cg_iter + numit_cg
-
-    CALL KSPGetConvergedReason(kspObj,reason,perr)
-    CALL KSPGetResidualNorm(kspObj,residual,perr)
-    error=residual
-
-    IF(reason < 0) THEN   ! Did not converge in CG, Progress onto Cheby
-
-      ! Main Solve is in Next section within Chebyshev
-
-      CALL KSPSetComputeEigenValues(kspObj,PETSC_FALSE,perr) ! Disable EigenValue Calculation
-
-      CALL KSPSetType(kspObj,KSPCHEBYSHEV,perr)
-      CALL KSPGetPC(kspObj,tPC,perr)
-      CALL PCSetType(tPC,PCBJACOBI,perr)
-
-      CALL KSPSetInitialGuessNonzero(kspObj,PETSC_TRUE,perr)    ! Disable zeroing of results vector (reuse for residual)
-      CALL KSPSetOperators(kspObj,A,A,SAME_NONZERO_PATTERN,perr)
-      CALL KSPSetTolerances(kspObj,eps,PETSC_DEFAULT_REAL,PETSC_DEFAULT_REAL,max_iters,perr)
-      CALL KSPChebyshevSetEigenValues(kspObj,emax,emin,perr)
-
-      CALL KSPSolve(kspObj,B,X,perr)
-
-      CALL KSPGetIterationNumber(kspObj, numit_cheby, perr)
-
-      CALL KSPGetConvergedReason(kspObj,reason,perr)
-      CALL KSPGetResidualNorm(kspObj,residual,perr)
-      error=residual
-      IF(reason < 0) THEN
-        WRITE(g_out,*) ' Error: Did not Converge. Calling MPI_Abort'
-        WRITE(g_out,*) ' Divergence Reason:'
-
-        IF(reason == -2) THEN
-          WRITE(g_out,*) ' Diverged Null'
-        ELSE IF(reason == -3) THEN
-          WRITE(g_out,*) ' Cheby - Diverged ITS, took ', numit_cheby, ' iterations'
-        ELSE IF(reason == -4) THEN
-          WRITE(g_out,*) ' Diverged DTOL'
-        ELSE IF(reason == -5) THEN
-          WRITE(g_out,*) ' Diverged Breakdown'
-        ELSE IF(reason == -6) THEN
-          WRITE(g_out,*) ' Diverged Breakdown BICG'
-        ELSE IF(reason == -7) THEN
-          WRITE(g_out,*) ' Diverged NonSymmetric'
-        ELSE IF(reason == -8) THEN
-          WRITE(g_out,*) ' Diverged Indefinite PC'
-        ELSE IF(reason == -9) THEN
-          WRITE(g_out,*) ' Diverged nanorinf'
-        ELSE IF(reason == -10) THEN
-          WRITE(g_out,*) ' Diverged indefinite mat'
-        ENDIF
-
-        CALL MPI_Abort(MPI_COMM_WORLD,errcode,mpierr)
-      ENDIF 
-
-      total_cheby_iter = total_cheby_iter + numit_cheby
-
-    ENDIF
-
-END SUBROUTINE solve_petsc_pgcg
-
 SUBROUTINE printXVec(fileName)
 
     USE MPI
 
     IMPLICIT NONE
 
-#   include "finclude/petscviewer.h"
+#   include <petsc/finclude/petscviewer.h>
 
     CHARACTER(LEN=*) :: fileName
     CHARACTER(LEN=8) :: id
@@ -532,7 +422,7 @@ SUBROUTINE printBVec(fileName)
 
     IMPLICIT NONE
 
-#   include "finclude/petscviewer.h"
+#   include <petsc/finclude/petscviewer.h>
 
     CHARACTER(LEN=*) :: fileName
     CHARACTER(LEN=8) :: id
@@ -553,7 +443,7 @@ SUBROUTINE printMatA(fileName)
 
     IMPLICIT NONE
 
-#   include "finclude/petscviewer.h"
+#   include <petsc/finclude/petscviewer.h>
 
     CHARACTER(LEN=*) :: fileName
     CHARACTER(LEN=8) :: id

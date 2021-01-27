@@ -59,21 +59,21 @@
 #        make IEEE=1              # Will select debug options as long as a compiler is selected as well
 # e.g. make COMPILER=INTEL MPI_COMPILER=mpiifort C_MPI_COMPILER=mpiicc DEBUG=1 IEEE=1 # will compile with the intel compiler with intel debug and ieee flags included
 
-# Example of how do you download, install and compile PETSc 3.5.2, assuming installing in /home/usid, with MPICH
+# Example of how do you download, install and compile PETSc 3.14.3, assuming installing in /home/usid, with MPICH
 # using the GNU compiler. It could work with others but might need maths libs in lib paths.
 # The variables OTHER_LIBS and HYPRE_LIB can be used to set these up on the make line.
 # 
 # cd /home/usid
-# git clone -b maint https://bitbucket.org/petsc/petsc petsc-3.5.2
-# cd petsc-3.5.2
+# git clone -b maint https://bitbucket.org/petsc/petsc petsc-3.14.3
+# cd petsc-3.14.3
 # ./configure --download-fblaslapack --download-hypre --download-mpich --with-debugging=0 --with-c2html=0
-# make PETSC_DIR=/home/usid/petsc-3.5.2 PETSC_ARCH=arch-linux2-c-opt all
-# export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/usid/petsc-3.5.2/arch-linux2-c-opt/lib/
+# make PETSC_DIR=/home/usid/petsc-3.14.3 PETSC_ARCH=arch-linux2-c-opt all
+# export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/usid/petsc-3.14.3/arch-linux2-c-opt/lib/
 # cd /home/usid/TeaLeaf_PETSc
-# COM_PATH_P=/home/usid/petsc-3.5.2/arch-linux2-c-opt make
+# COM_PATH_P=/home/usid/petsc-3.14.3/arch-linux2-c-opt make
 #
 # Here is an example of how you might compile with the intel compiler if the location of libraries is not already loaded via a module system.
-# COM_PATH_P=/home/usid/petsc-3.5.2/intel-13.1-opt HYPRE_LIB=/opt/hypre/2.9.0b/lib OTHER_LIBS=/opt/intel/composer_xe_2013.5.192/compiler/lib/intel64 make COMPILER=INTEL
+# COM_PATH_P=/home/usid/petsc-3.14.3/intel-13.1-opt HYPRE_LIB=/opt/hypre/2.9.0b/lib OTHER_LIBS=/opt/intel/composer_xe_2013.5.192/compiler/lib/intel64 make COMPILER=INTEL
 
 ifndef COMPILER
   MESSAGE=select a compiler to compile in OpenMP, e.g. make COMPILER=INTEL
@@ -152,9 +152,8 @@ REQ_LIB_XL=-lstdc++
 PETSC_SOURCE=PetscLeaf.F90
 PETSC_DIR=${COM_PATH_P}
 PETSC_DIR_F=${COM_PATH_P}/..
-PETSC_LIB=-L${PETSC_DIR}/lib -lpetsc
 PETSC_INC=-I${PETSC_DIR}/include -I${PETSC_DIR_F}/include/ -I${PETSC_DIR_F}/include/petsc
-REQ_LIB_=-lstdc++
+include ${PETSC_DIR}/lib/petsc/conf/petscvariables
 
 ifdef NO_PETSC 
   COM_PATH_P=
@@ -162,7 +161,6 @@ ifdef NO_PETSC
   PETSC_DIR=
   PETSC_INC=
   PETSC_DIR_F=
-  PETSC_LIB=
 endif
 
 FLAGS=${FLAGS_$(COMPILER)} ${OMP} ${I3E} ${OPTIONS} ${PETSC_INC}
@@ -207,7 +205,7 @@ tea_leaf: c_lover *.f90 Makefile
 	tea_leaf.f90			\
 	diffuse.f90                     \
 	timer_c.o                       \
-	$(PETSC_LIB)   			\
+	$(PETSC_WITH_EXTERNAL_LIB)	\
 	$(REQ_LIB)			\
 	-o tea_leaf; echo $(MESSAGE)
 
