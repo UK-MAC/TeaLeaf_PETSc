@@ -1,0 +1,232 @@
+
+   Tea Version    1.000
+       MPI Version
+   Task Count      4
+
+ Tea will run from the following input:-
+
+*tea                                                                                                
+state 1 density=100.0 energy=0.0001                                                                 
+state 2 density=0.1 energy=25.0 geometry=rectangle xmin=0.0 xmax=1.0 ymin=1.0 ymax=2.0              
+state 3 density=0.1 energy=0.1 geometry=rectangle xmin=1.0 xmax=6.0 ymin=1.0 ymax=2.0               
+state 4 density=0.1 energy=0.1 geometry=rectangle xmin=5.0 xmax=6.0 ymin=1.0 ymax=8.0               
+state 5 density=0.1 energy=0.1 geometry=rectangle xmin=5.0 xmax=10.0 ymin=7.0 ymax=8.0              
+x_cells=4000                                                                                        
+y_cells=4000                                                                                        
+xmin=0.0                                                                                            
+ymin=0.0                                                                                            
+xmax=10.0                                                                                           
+ymax=10.0                                                                                           
+initial_timestep=0.004                                                                              
+end_step=10                                                                                         
+tl_max_iters=10000                                                                                  
+use_petsc                                                                                           
+tl_eps 1.0e-15                                                                                      
+test_problem 5                                                                                      
+profiler_on                                                                                         
+*endtea                                                                                             
+
+ Initialising and generating
+
+ Reading input file
+
+ Reading specification for state            1
+
+            state density   0.1000E+03
+             state energy   0.1000E-03
+
+ Reading specification for state            2
+
+            state density   0.1000E+00
+             state energy   0.2500E+02
+ state geometry rectangular
+               state xmin   0.0000E+00
+               state xmax   0.1000E+01
+               state ymin   0.1000E+01
+               state ymax   0.2000E+01
+
+ Reading specification for state            3
+
+            state density   0.1000E+00
+             state energy   0.1000E+00
+ state geometry rectangular
+               state xmin   0.1000E+01
+               state xmax   0.6000E+01
+               state ymin   0.1000E+01
+               state ymax   0.2000E+01
+
+ Reading specification for state            4
+
+            state density   0.1000E+00
+             state energy   0.1000E+00
+ state geometry rectangular
+               state xmin   0.5000E+01
+               state xmax   0.6000E+01
+               state ymin   0.1000E+01
+               state ymax   0.8000E+01
+
+ Reading specification for state            5
+
+            state density   0.1000E+00
+             state energy   0.1000E+00
+ state geometry rectangular
+               state xmin   0.5000E+01
+               state xmax   0.1000E+02
+               state ymin   0.7000E+01
+               state ymax   0.8000E+01
+
+                   x_cells        4000
+                   y_cells        4000
+                      xmin  0.0000E+00
+                      ymin  0.0000E+00
+                      xmax  0.1000E+02
+                      ymax  0.1000E+02
+         initial_timestep   0.4000E-02
+                  end_step          10
+              test_problem           5
+               Profiler on
+
+ Using Fortran Kernels
+
+ Input read finished.
+
+ Setting up initial geometry
+
+
+ Mesh ratio of    1.0000000000000000     
+ Decomposing the mesh into            2  by            2  chunks
+
+  Using PETSc
+
+ PETSc Setup:
+ Absolute Tolerance set to   1.0000000000000001E-015
+ max_iters set to       10000
+ Generating chunks
+
+ Problem initialised and generated
+
+ Time    0.0000000000000000     
+                       Volume            Mass         Density          Energy               U
+ step:      0   0.1000000E+03   0.8401600E+04   0.8401600E+02   0.3490000E+01   0.8426500E+02
+
+ Starting the calculation
+ Step       1 time   0.0000000 timestep   4.00E-03
+ Achieved convergence in         2097  iterations
+ Current Total Iterations:         2097
+Conduction error  0.6432410E-20
+Iteration count     2096
+      Solve Time    9.6050529480    Its   2096     Time Per It    0.0045825634
+ Wall clock    9.6104359626770020     
+ Average time per cell    6.0065224766731259E-007
+ Step time per cell       6.0033030807971949E-007
+ Step       2 time   0.0040000 timestep   4.00E-03
+ Achieved convergence in         2040  iterations
+ Current Total Iterations:         4137
+Conduction error  0.2599670E-16
+Iteration count     2039
+      Solve Time    8.9389691353    Its   2039     Time Per It    0.0043839966
+ Wall clock    18.549540042877197     
+ Average time per cell    5.7967312633991238E-007
+ Step time per cell       5.5869163572788239E-007
+ Step       3 time   0.0080000 timestep   4.00E-03
+ Achieved convergence in         1987  iterations
+ Current Total Iterations:         6124
+Conduction error  0.9615705E-16
+Iteration count     1986
+      Solve Time    8.7755539417    Its   1986     Time Per It    0.0044187079
+ Wall clock    27.325238943099976     
+ Average time per cell    5.6927581131458287E-007
+ Step time per cell       5.4847843945026403E-007
+ Step       4 time   0.0120000 timestep   4.00E-03
+ Achieved convergence in         1970  iterations
+ Current Total Iterations:         8094
+Conduction error  0.1587071E-15
+Iteration count     1969
+      Solve Time    8.7196559906    Its   1969     Time Per It    0.0044284693
+ Wall clock    36.045042991638184     
+ Average time per cell    5.6320379674434658E-007
+ Step time per cell       5.4498507082462312E-007
+ Step       5 time   0.0160000 timestep   4.00E-03
+ Achieved convergence in         1963  iterations
+ Current Total Iterations:        10057
+Conduction error  0.2158298E-15
+Iteration count     1962
+      Solve Time    8.6984159946    Its   1962     Time Per It    0.0044334434
+ Wall clock    44.743604898452759     
+ Average time per cell    5.5929506123065953E-007
+ Step time per cell       5.4365755617618557E-007
+ Step       6 time   0.0200000 timestep   4.00E-03
+ Achieved convergence in         1935  iterations
+ Current Total Iterations:        11992
+Conduction error  0.2675266E-15
+Iteration count     1934
+      Solve Time    8.6116180420    Its   1934     Time Per It    0.0044527498
+ Wall clock    53.355367898941040     
+ Average time per cell    5.5578508228063581E-007
+ Step time per cell       5.3823256492614747E-007
+ Step       7 time   0.0240000 timestep   4.00E-03
+ Achieved convergence in         1921  iterations
+ Current Total Iterations:        13913
+Conduction error  0.3134729E-15
+Iteration count     1920
+      Solve Time    8.5645489693    Its   1920     Time Per It    0.0044607026
+ Wall clock    61.920060873031616     
+ Average time per cell    5.5285768636635367E-007
+ Step time per cell       5.3529074788093563E-007
+ Step       8 time   0.0280000 timestep   4.00E-03
+ Achieved convergence in         1913  iterations
+ Current Total Iterations:        15826
+Conduction error  0.3619373E-15
+Iteration count     1912
+      Solve Time    8.5395960808    Its   1912     Time Per It    0.0044663159
+ Wall clock    70.459797859191895     
+ Average time per cell    5.5046717077493666E-007
+ Step time per cell       5.3373093903064731E-007
+ Step       9 time   0.0320000 timestep   4.00E-03
+ Achieved convergence in         1910  iterations
+ Current Total Iterations:        17736
+Conduction error  0.4099820E-15
+Iteration count     1909
+      Solve Time    8.5315799713    Its   1909     Time Per It    0.0044691357
+ Wall clock    78.991523027420044     
+ Average time per cell    5.4855224324597255E-007
+ Step time per cell       5.3323012590408320E-007
+ Step      10 time   0.0360000 timestep   4.00E-03
+ Achieved convergence in         1904  iterations
+ Current Total Iterations:        19640
+Conduction error  0.4563203E-15
+Iteration count     1903
+      Solve Time    8.5136899948    Its   1903     Time Per It    0.0044738255
+
+ Time    4.0000000000000008E-002
+                       Volume            Mass         Density          Energy               U
+ step:     10   0.1000000E+03   0.8401600E+04   0.8401600E+02   0.3490000E+01   0.9546235E+02
+
+ Wall clock    87.514562845230103     
+ Average time per cell    5.4696601778268818E-007
+ Step time per cell       5.3268499672412867E-007
+
+ Time    4.0000000000000008E-002
+                       Volume            Mass         Density          Energy               U
+ step:     10   0.1000000E+03   0.8401600E+04   0.8401600E+02   0.3490000E+01   0.9546235E+02
+
+Test problem   5 is within   0.7626156E-08% of the expected solution
+ This test is considered PASSED
+
+ Calculation complete
+ Tea is finishing
+ First step overhead  0.66621875762939453     
+ Wall clock    87.523756027221680     
+
+Profiler Output                 Time            Percentage
+Timestep              :          0.0014          0.0016
+Halo Exchange         :          0.0282          0.0322
+Summary               :          0.0182          0.0208
+Visit                 :          0.0000          0.0000
+Tea Init              :          0.5918          0.6761
+Dot Product           :          0.0002          0.0002
+Tea Solve             :         86.8272         99.2041
+Tea Reset             :          0.0708          0.0809
+Set Field             :          0.0048          0.0055
+Total                 :         87.5425        100.0214
+The Rest              :         -0.0187         -0.0214
