@@ -36,6 +36,7 @@ SUBROUTINE setup_petsc(eps,max_iters)
   INTEGER :: max_iters
 
   CALL PetscInitialize(PETSC_NULL_CHARACTER,perr)
+  CALL PetscCUDAInitialize(parallel%task, PETSC_DEFAULT_INTEGER, perr)
 
   ! px, py set in tea_decompose to be chunks_x and chunks_y
   ! clover_decompose MUST be called first
@@ -98,14 +99,14 @@ SUBROUTINE cleanup_petsc()
 
 #include <petsc/finclude/petscsys.h>
 
-  call KSPDestroy(kspObj,perr)
-  call VecDestroy(Sol,perr)
-  call VecDestroy(X,perr)
-  call VecDestroy(B,perr)
-  call VecDestroy(XLoc,perr)
-  call VecDestroy(RHSLoc,perr)
-  call MatDestroy(A,perr)
-  call DMDestroy(petscDA,perr)
+!  call KSPDestroy(kspObj,perr)
+!  call VecDestroy(Sol,perr)
+!  call VecDestroy(X,perr)
+!  call VecDestroy(B,perr)
+!  call VecDestroy(XLoc,perr)
+!  call VecDestroy(RHSLoc,perr)
+!  call MatDestroy(A,perr)
+!  call DMDestroy(petscDA,perr)
   call PetscFinalize(perr)
 
 END SUBROUTINE cleanup_petsc

@@ -151,7 +151,7 @@ REQ_LIB_XL=-lstdc++
 
 PETSC_SOURCE=PetscLeaf.F90
 PETSC_DIR=${COM_PATH_P}
-PETSC_DIR_F=${COM_PATH_P}/..
+PETSC_DIR_F=${COM_PATH_P}/arch-linux-c-opt
 PETSC_INC=-I${PETSC_DIR}/include -I${PETSC_DIR_F}/include/ -I${PETSC_DIR_F}/include/petsc
 include ${PETSC_DIR}/lib/petsc/conf/petscvariables
 
